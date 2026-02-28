@@ -108,6 +108,27 @@ async def test_translate_rejects_invalid_language_codes(
 
 
 @pytest.mark.asyncio
+async def test_translate_rejects_blank_language_codes_after_strip(
+    client,
+    psk: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.routes.translate as translate_module
+
+    def _should_not_call():
+        raise AssertionError("Mistral client should not be called for invalid payloads")
+
+    monkeypatch.setattr(translate_module, "get_mistral_client", _should_not_call)
+
+    response = await client.post(
+        "/api/translate",
+        headers={"X-PSK": psk},
+        json={"text": "Hello", "target_lang": "  "},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_translate_rejects_empty_text(client, psk: str, monkeypatch: pytest.MonkeyPatch) -> None:
     import vibecheck.routes.translate as translate_module
 
