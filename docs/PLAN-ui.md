@@ -100,8 +100,8 @@ Full height = `100dvh` (dynamic viewport height for mobile browser chrome). Layo
 The bottom-most bar of the app. Compact single-line strip.
 
 **Default content:**
-- Session status text (e.g. "idle", "running", "waiting approval")
-- Cost ticker when available (e.g. "$0.42 | 12K tokens") — right-aligned
+- Left: session status text (e.g. "idle", "running", "waiting approval")
+- Right: token/cost counter (e.g. "$0.42 | 12K tokens") — always visible, updates in real time
 
 **Interactive elements:**
 - Tap to expand status panel (or long-press for YOLO toggle)
