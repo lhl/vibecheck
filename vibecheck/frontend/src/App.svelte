@@ -498,11 +498,11 @@
       })
       sessionId = normalized
       storeSessionId(normalized)
+      await refreshSessions()
       connectSocket()
       if (payload?.backlog) {
         mergeEvents(payload.backlog)
       }
-      await refreshSessions()
     } catch (error) {
       sessionError = error instanceof Error ? error.message : 'Failed to resume session'
     } finally {

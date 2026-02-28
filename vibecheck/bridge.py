@@ -419,7 +419,7 @@ class SessionBridge:
             except (OSError, json.JSONDecodeError):
                 metadata = {}
 
-        if not messages:
+        if not messages and not metadata:
             return
 
         for message in messages:

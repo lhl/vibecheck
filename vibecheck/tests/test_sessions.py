@@ -251,3 +251,65 @@ async def test_diffs_endpoint_returns_before_after_structured_data(
     assert payload[0]["tool_name"] == "write_file"
     assert payload[0]["before"] == "before"
     assert payload[0]["after"] == "after"
+
+
+@pytest.mark.asyncio
+async def test_resume_unknown_session_returns_404(sessions_client) -> None:
+    client, _ = sessions_client
+
+    response = await client.post("/api/sessions/does-not-exist/resume", headers={"X-PSK": "dev-psk"})
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_diffs_endpoint_returns_empty_list_when_no_diffs(sessions_client) -> None:
+    client, _ = sessions_client
+
+    response = await client.get("/api/sessions/session-a/diffs", headers={"X-PSK": "dev-psk"})
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_resume_calls_session_logger_even_without_message_history(
+    monkeypatch: pytest.MonkeyPatch, sessions_client
+) -> None:
+    import vibecheck.bridge as bridge_module
+
+    runtime = VibeRuntime(
+        agent_loop_cls=FakeAgentLoop,
+        vibe_config_cls=FakeVibeConfig,
+        approval_yes=FakeApprovalResponse.YES,
+        approval_no=FakeApprovalResponse.NO,
+        ask_result_cls=None,
+        answer_cls=None,
+    )
+    monkeypatch.setattr(bridge_module, "load_vibe_runtime", lambda: runtime)
+
+    client, manager = sessions_client
+
+    logs_root = manager.logs_root
+    session_dir = logs_root / "session_empty"
+    session_dir.mkdir(parents=True)
+    (session_dir / "meta.json").write_text(
+        json.dumps(
+            {
+                "session_id": "session-empty",
+                "start_time": "2026-02-28T00:02:00Z",
+                "end_time": "2026-02-28T00:03:00Z",
+                "title": "Empty history session",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    response = await client.post("/api/sessions/session-empty/resume", headers={"X-PSK": "dev-psk"})
+
+    assert response.status_code == 200
+
+    bridge = manager.get("session-empty")
+    assert bridge._agent_loop is not None
+    assert bridge._agent_loop.session_id == "session-empty"
+    assert bridge._agent_loop.session_logger.resumed == ("session-empty", session_dir)

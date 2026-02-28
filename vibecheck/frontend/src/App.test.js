@@ -7,8 +7,11 @@ import { appendEvent, resetEvents } from './stores/events'
 function installWebSocketStub() {
   class StubWebSocket {
     static OPEN = 1
+    static instances = []
 
-    constructor() {
+    constructor(url) {
+      this.url = url
+      StubWebSocket.instances.push(this)
       this.readyState = StubWebSocket.OPEN
       this.onopen = null
       this.onclose = null
@@ -28,6 +31,7 @@ function installWebSocketStub() {
   }
 
   vi.stubGlobal('WebSocket', StubWebSocket)
+  return StubWebSocket
 }
 
 describe('App phase 4 shell', () => {
@@ -319,5 +323,96 @@ describe('App phase 4 shell', () => {
     render(App)
 
     expect(await screen.findByRole('button', { name: /new session/i })).toBeInTheDocument()
+  })
+
+  it('resumes a disconnected session and reconnects websocket after refreshing sessions', async () => {
+    localStorage.setItem('vibecheck_psk', 'dev-psk')
+
+    let sessionsCallCount = 0
+    const fetchSpy = vi.fn((resource, options = {}) => {
+      if (resource === '/api/sessions') {
+        sessionsCallCount += 1
+        const payload =
+          sessionsCallCount === 1
+            ? [
+                {
+                  id: 's-old',
+                  status: 'disconnected',
+                  last_activity: '2026-02-28T00:00:00Z',
+                  message_count: 1,
+                  title: 'Old session',
+                  attach_mode: 'observe_only',
+                  controllable: false,
+                },
+              ]
+            : [
+                {
+                  id: 's-old',
+                  status: 'idle',
+                  last_activity: '2026-02-28T00:00:00Z',
+                  message_count: 1,
+                  title: 'Old session',
+                  attach_mode: 'managed',
+                  controllable: true,
+                },
+              ]
+        return Promise.resolve(
+          new Response(JSON.stringify(payload), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        )
+      }
+
+      if (resource === '/api/sessions/s-old/resume' && options.method === 'POST') {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              id: 's-old',
+              state: 'idle',
+              attach_mode: 'managed',
+              controllable: true,
+              pending_approval: [],
+              pending_input: [],
+              backlog: [{ type: 'assistant', id: 'resumed-1', content: 'resumed backlog' }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        )
+      }
+
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))
+    })
+
+    vi.stubGlobal('fetch', fetchSpy)
+
+    render(App)
+
+    appendEvent({ type: 'assistant', id: 'old-1', content: 'old timeline message' })
+    expect(await screen.findByText('old timeline message')).toBeInTheDocument()
+
+    const browse = await screen.findByText('Browse older sessions')
+    const details = browse.closest('details')
+    if (details) {
+      details.open = true
+    } else {
+      await fireEvent.click(browse)
+    }
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Resume' }))
+
+    await waitFor(() => {
+      expect(globalThis.WebSocket.instances.length).toBeGreaterThan(0)
+    })
+
+    const socketUrl = globalThis.WebSocket.instances[0].url
+    expect(socketUrl).toContain('/ws/events/s-old')
+    expect(socketUrl).toContain('psk=dev-psk')
+
+    await waitFor(() => {
+      expect(screen.queryByText('old timeline message')).not.toBeInTheDocument()
+    })
+
+    expect(await screen.findByText('resumed backlog')).toBeInTheDocument()
   })
 })
