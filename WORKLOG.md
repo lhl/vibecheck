@@ -505,3 +505,22 @@
   - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
   - `cd vibecheck/frontend && npm test` -> pass.
   - `cd vibecheck/frontend && npm run build` -> success.
+
+### Phase 6B Push notifications (WU-19 + WU-20)
+- Backend (WU-19):
+  - Added VAPID key generation + persistence (`~/.vibecheck/vapid_keys.json`) and subscription persistence (`~/.vibecheck/push_subscriptions.json`).
+  - Added push API routes:
+    - `GET /api/push/vapid-key`
+    - `POST /api/push/subscribe`
+    - `POST /api/push/unsubscribe`
+  - Wired bridge-level push triggers for `approval_request`, `input_request`, and error `tool_result` events.
+  - Added coverage in `vibecheck/tests/test_push.py` (subscribe/unsubscribe + approval_request push trigger, mocking `pywebpush.webpush_async`).
+- Frontend (WU-20):
+  - Added `lib/push.js` helper for subscribe/unsubscribe (VAPID key fetch + PushManager.subscribe payload forward).
+  - Updated `public/sw.js` push handler to `showNotification` with actions + `notificationclick` open/focus behavior.
+  - Added notifications toggle in `App.svelte` settings and persisted enable state in `lib/settings.js`.
+  - Added `lib/push.test.js` + extended `lib/settings.test.js`.
+- Verification:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
+  - `cd vibecheck/frontend && npm test` -> pass.
+  - `cd vibecheck/frontend && npm run build` -> success.
