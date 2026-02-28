@@ -585,3 +585,11 @@
 - Verification:
   - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
   - `cd vibecheck/frontend && npm test && npm run build` -> pass.
+
+### Phase 6A review fixes (Recorder + voice coverage)
+- Fixed `MediaRecorder.onerror` state leak so new recordings can start after an error (`vibecheck/frontend/src/lib/recorder.js`).
+- Added unit coverage for recorder error recovery (`vibecheck/frontend/src/lib/recorder.test.js`).
+- Added backend voice coverage for missing `MISTRAL_API_KEY`, SDKError mapping, and `_segments_duration_ms` edge cases (`vibecheck/tests/test_voice.py`).
+- Verification:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
+  - `cd vibecheck/frontend && npm test && npm run build` -> pass.
