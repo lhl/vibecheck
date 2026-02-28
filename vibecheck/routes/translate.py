@@ -6,11 +6,13 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from mistralai import Mistral
 from mistralai.models.sdkerror import SDKError
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 router = APIRouter()
 
 TRANSLATE_MODEL = "mistral-large-latest"
+MAX_TRANSLATE_CHARS = 4000
+LANG_CODE_PATTERN = r"^[A-Za-z]{2,8}(-[A-Za-z0-9]{2,8})?$"
 
 SYSTEM_PROMPT = """You are a translation engine.
 
@@ -25,9 +27,32 @@ Rules:
 
 
 class TranslateRequest(BaseModel):
-    text: str = Field(min_length=1)
-    target_lang: str = Field(min_length=2)
-    source_lang: str | None = None
+    text: str = Field(min_length=1, max_length=MAX_TRANSLATE_CHARS)
+    target_lang: str = Field(
+        min_length=2,
+        max_length=16,
+        pattern=LANG_CODE_PATTERN,
+    )
+    source_lang: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=16,
+        pattern=LANG_CODE_PATTERN,
+    )
+
+    @field_validator("target_lang", mode="before")
+    @classmethod
+    def _strip_target_lang(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    @field_validator("source_lang", mode="before")
+    @classmethod
+    def _strip_source_lang(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
 
 class TranslateResponse(BaseModel):
@@ -105,4 +130,3 @@ async def translate(body: TranslateRequest) -> TranslateResponse:
         source_lang=source_lang or "auto",
         target_lang=target_lang,
     )
-

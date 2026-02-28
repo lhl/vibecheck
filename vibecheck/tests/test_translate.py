@@ -63,3 +63,45 @@ async def test_translate_endpoint_builds_prompt_and_returns_translation(
     system = messages[0]
     assert system["role"] == "system"
     assert "code block" in system["content"].lower()
+
+
+@pytest.mark.asyncio
+async def test_translate_rejects_oversized_text(
+    client,
+    psk: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.routes.translate as translate_module
+
+    def _should_not_call():
+        raise AssertionError("Mistral client should not be called for invalid payloads")
+
+    monkeypatch.setattr(translate_module, "get_mistral_client", _should_not_call)
+
+    response = await client.post(
+        "/api/translate",
+        headers={"X-PSK": psk},
+        json={"text": "x" * 5000, "target_lang": "ja"},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_translate_rejects_invalid_language_codes(
+    client,
+    psk: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.routes.translate as translate_module
+
+    def _should_not_call():
+        raise AssertionError("Mistral client should not be called for invalid payloads")
+
+    monkeypatch.setattr(translate_module, "get_mistral_client", _should_not_call)
+
+    response = await client.post(
+        "/api/translate",
+        headers={"X-PSK": psk},
+        json={"text": "Hello", "target_lang": "ja;rm -rf /"},
+    )
+    assert response.status_code == 422
