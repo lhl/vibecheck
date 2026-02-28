@@ -54,7 +54,7 @@ Verification (current):
 - Rate limiting / usage caps on `/api/voice/transcribe`, `/api/translate`, `/api/push/*`.
 - Decide PSK-in-query-param policy for REST (WS currently uses query param; REST middleware still accepts it).
 - No user-facing API/UI to configure push intensity level or snooze.
-- Translation FE error UX doesn’t parse JSON `{detail}` (uses `status/statusText` only).
+- ~~Translation FE error UX doesn’t parse JSON `{detail}` (uses `status/statusText` only).~~ Fixed in `b6f50d1` (ChatMessage + ApprovalPanel now extract `detail`).
 
 ---
 
