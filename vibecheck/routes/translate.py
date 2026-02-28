@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import Any
 
@@ -12,6 +13,7 @@ router = APIRouter()
 
 TRANSLATE_MODEL = "mistral-large-latest"
 MAX_TRANSLATE_CHARS = 4000
+TRANSLATE_TIMEOUT_SECONDS = 15
 LANG_CODE_PATTERN = r"^[A-Za-z]{2,8}(-[A-Za-z0-9]{2,8})?$"
 
 SYSTEM_PROMPT = """You are a translation engine.
@@ -120,11 +122,16 @@ async def translate(body: TranslateRequest) -> TranslateResponse:
 
     client = get_mistral_client()
     try:
-        result = await client.chat.complete_async(
-            model=TRANSLATE_MODEL,
-            messages=messages,
-            temperature=0.1,
+        result = await asyncio.wait_for(
+            client.chat.complete_async(
+                model=TRANSLATE_MODEL,
+                messages=messages,
+                temperature=0.1,
+            ),
+            timeout=TRANSLATE_TIMEOUT_SECONDS,
         )
+    except TimeoutError as error:
+        raise HTTPException(status_code=504, detail="Translation upstream timed out") from error
     except SDKError as error:
         raise _map_mistral_error(error) from error
 

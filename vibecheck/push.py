@@ -61,7 +61,7 @@ class PushManager:
         self._storage_dir = storage_dir or _default_storage_dir()
         self._lock = threading.Lock()
         self.intensity = IntensityManager()
-        self._idle_session_id: str | None = None
+        self._idle_sessions: set[str] = set()
         self._idle_task: asyncio.Task[None] | None = None
 
     def _cancel_idle_task(self) -> None:
@@ -102,15 +102,13 @@ class PushManager:
             return
 
         if normalized in {"waiting_approval", "waiting_input"}:
-            if self._idle_session_id != session_id:
-                self.intensity.mark_active()
-                self._idle_session_id = session_id
+            self._idle_sessions.add(session_id)
             self.intensity.mark_idle()
             self._ensure_idle_task()
             return
 
-        if self._idle_session_id == session_id:
-            self._idle_session_id = None
+        self._idle_sessions.discard(session_id)
+        if not self._idle_sessions:
             self.intensity.mark_active()
             self._cancel_idle_task()
 
@@ -236,6 +234,7 @@ class PushManager:
                 "requireInteraction": True,
                 "tag": f"approval:{event.call_id}",
                 "url": f"/?sid={session_id}",
+                "call_id": event.call_id,
                 "actions": [
                     {"action": "approve", "title": "Approve"},
                     {"action": "deny", "title": "Deny"},
@@ -275,8 +274,7 @@ class PushManager:
         )
 
     async def _send_idle_escalation_if_needed(self) -> None:
-        session_id = self._idle_session_id
-        if not session_id:
+        if not self._idle_sessions:
             return
 
         message = self.intensity.get_idle_message()
@@ -284,26 +282,27 @@ class PushManager:
             return
 
         title, body = message
-        payload = {
-            "title": title,
-            "body": body,
-            "requireInteraction": False,
-            "tag": f"idle:{session_id}",
-            "url": f"/?sid={session_id}",
-        }
-
         subscriptions = self._load_subscriptions()
         if not subscriptions:
             return
 
-        for subscription in subscriptions:
-            try:
-                await self._send_notification(subscription=subscription, payload=payload, urgency="low")
-            except WebPushException as error:
-                self._maybe_prune_subscription_on_error(subscription, error)
-                logger.exception("idle push send failed for session %s", session_id)
-            except Exception:
-                logger.exception("idle push crashed for session %s", session_id)
+        for session_id in list(self._idle_sessions):
+            payload = {
+                "title": title,
+                "body": body,
+                "requireInteraction": False,
+                "tag": f"idle:{session_id}",
+                "url": f"/?sid={session_id}",
+            }
+
+            for subscription in subscriptions:
+                try:
+                    await self._send_notification(subscription=subscription, payload=payload, urgency="low")
+                except WebPushException as error:
+                    self._maybe_prune_subscription_on_error(subscription, error)
+                    logger.exception("idle push send failed for session %s", session_id)
+                except Exception:
+                    logger.exception("idle push crashed for session %s", session_id)
 
     def _maybe_prune_subscription_on_error(self, subscription: dict[str, Any], error: WebPushException) -> None:
         response = getattr(error, "response", None)

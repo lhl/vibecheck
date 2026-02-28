@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 
@@ -262,3 +264,31 @@ async def test_translate_returns_502_when_upstream_empty_output(
     assert response.status_code == 502
     payload = response.json()
     assert "empty" in payload.get("detail", "").lower()
+
+
+@pytest.mark.asyncio
+async def test_translate_returns_504_on_upstream_timeout(
+    client,
+    psk: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.routes.translate as translate_module
+
+    class _HangingChat:
+        async def complete_async(self, **_kwargs):
+            await asyncio.sleep(999)
+
+    class _HangingClient:
+        def __init__(self) -> None:
+            self.chat = _HangingChat()
+
+    monkeypatch.setattr(translate_module, "get_mistral_client", lambda: _HangingClient())
+    monkeypatch.setattr(translate_module, "TRANSLATE_TIMEOUT_SECONDS", 0.01)
+
+    response = await client.post(
+        "/api/translate",
+        headers={"X-PSK": psk},
+        json={"text": "Hello", "target_lang": "ja"},
+    )
+    assert response.status_code == 504
+    assert "timed out" in response.json().get("detail", "").lower()

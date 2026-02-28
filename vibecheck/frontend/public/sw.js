@@ -42,6 +42,7 @@ self.addEventListener('push', (event) => {
     requireInteraction: Boolean(payload.requireInteraction),
     data: {
       url: typeof payload.url === 'string' ? payload.url : '/',
+      call_id: typeof payload.call_id === 'string' ? payload.call_id : null,
       action: null,
     },
     actions: Array.isArray(payload.actions) ? payload.actions : [],
@@ -54,17 +55,24 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const action = event.action || ''
   const url = event.notification?.data?.url || '/'
+  const callId = event.notification?.data?.call_id || null
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {
         if (client.url && client.url.includes(url)) {
-          client.postMessage({ type: 'notification_action', action, url })
+          client.postMessage({ type: 'notification_action', action, url, call_id: callId })
           return client.focus()
         }
       }
 
-      const decorated = action ? `${url}${url.includes('?') ? '&' : '?'}action=${encodeURIComponent(action)}` : url
+      let decorated = url
+      if (action) {
+        decorated += `${url.includes('?') ? '&' : '?'}action=${encodeURIComponent(action)}`
+      }
+      if (callId) {
+        decorated += `${decorated.includes('?') ? '&' : '?'}call_id=${encodeURIComponent(callId)}`
+      }
       return self.clients.openWindow(decorated)
     }),
   )

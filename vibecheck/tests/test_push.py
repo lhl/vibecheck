@@ -120,6 +120,7 @@ async def test_push_sends_notification_on_approval_request(
     assert isinstance(payload, str) and "requireInteraction" in payload
     decoded = json.loads(payload)
     assert decoded["body"] == "Please approve (test)"
+    assert decoded["call_id"] == "tc-push-1", "payload must include call_id for call-bound actions"
     assert calls[0]["vapid_claims"] == {"sub": "mailto:tests@example.com"}
 
     assert bridge.resolve_approval("tc-push-1", approved=True)
@@ -187,11 +188,11 @@ async def test_push_sends_idle_escalation_after_waiting_for_approval(
     calls.clear()
 
     for _ in range(100):
-        if manager._idle_session_id == "push-session-idle":  # type: ignore[attr-defined]
+        if "push-session-idle" in manager._idle_sessions:  # type: ignore[attr-defined]
             break
         await asyncio.sleep(0)
 
-    assert manager._idle_session_id == "push-session-idle"  # type: ignore[attr-defined]
+    assert "push-session-idle" in manager._idle_sessions  # type: ignore[attr-defined]
 
     now[0] += timedelta(minutes=5)
     await manager._send_idle_escalation_if_needed()
@@ -277,6 +278,88 @@ async def test_push_subscriptions_file_is_restricted_to_owner(
     path = push_home / ".vibecheck" / "push_subscriptions.json"
     assert path.exists()
     assert (path.stat().st_mode & 0o777) == 0o600
+
+
+@pytest.mark.asyncio
+async def test_push_idle_escalation_covers_multiple_sessions(
+    push_client: AsyncClient,
+    psk: str,
+    push_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When two sessions are waiting, idle escalation fires for both."""
+    _ = push_home
+
+    import vibecheck.push as push_module
+
+    manager = push_module._current_push_manager
+    assert manager is not None
+
+    now = [datetime(2026, 2, 28, 12, 0, 0)]
+    manager.intensity._now_fn = lambda: now[0]  # type: ignore[attr-defined]
+    manager.intensity.level = 4
+
+    calls: list[dict[str, object]] = []
+
+    async def fake_webpush(*, subscription_info, data=None, **_kwargs):
+        calls.append({"subscription_info": subscription_info, "data": data})
+
+    monkeypatch.setattr(push_module, "webpush_async", fake_webpush)
+
+    async def fake_copy(_tool_name: str, _args: dict[str, object]) -> str:
+        return "Approve (test)"
+
+    monkeypatch.setattr(push_module, "generate_notification_copy", fake_copy)
+
+    subscription = {
+        "endpoint": "https://example.com/push/multi-idle",
+        "keys": {"p256dh": "p256dh-key", "auth": "auth-key"},
+    }
+    subscribe = await push_client.post(
+        "/api/push/subscribe",
+        headers={"X-PSK": psk},
+        json=subscription,
+    )
+    assert subscribe.status_code == 200
+
+    bridge_a = session_manager.attach("session-a")
+    bridge_b = session_manager.attach("session-b")
+
+    task_a = asyncio.create_task(
+        bridge_a.request_approval(call_id="tc-a", tool_name="bash", args={"command": "echo a"})
+    )
+    await asyncio.sleep(0)
+    task_b = asyncio.create_task(
+        bridge_b.request_approval(call_id="tc-b", tool_name="bash", args={"command": "echo b"})
+    )
+    await asyncio.sleep(0)
+
+    for _ in range(100):
+        if "session-a" in manager._idle_sessions and "session-b" in manager._idle_sessions:
+            break
+        await asyncio.sleep(0)
+
+    assert "session-a" in manager._idle_sessions
+    assert "session-b" in manager._idle_sessions
+
+    calls.clear()
+    now[0] += timedelta(minutes=5)
+    await manager._send_idle_escalation_if_needed()
+
+    # Should have sent escalation for both sessions
+    idle_tags = set()
+    for call in calls:
+        payload_str = call["data"]
+        decoded = json.loads(payload_str)
+        idle_tags.add(decoded.get("tag", ""))
+
+    assert "idle:session-a" in idle_tags, "expected idle escalation for session-a"
+    assert "idle:session-b" in idle_tags, "expected idle escalation for session-b"
+
+    assert bridge_a.resolve_approval("tc-a", approved=True)
+    assert bridge_b.resolve_approval("tc-b", approved=True)
+    await task_a
+    await task_b
 
 
 def test_vapid_keypair_regenerates_when_keys_file_is_corrupt(

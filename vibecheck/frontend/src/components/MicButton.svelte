@@ -171,6 +171,14 @@
 
   onDestroy(() => {
     stopTimer()
+    // Release mic/tracks if still recording when component unmounts
+    if (isRecording()) {
+      try {
+        stopRecording()
+      } catch {
+        // no-op
+      }
+    }
   })
 </script>
 

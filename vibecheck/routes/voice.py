@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import Any, Literal
 
@@ -13,6 +14,7 @@ router = APIRouter()
 
 VOXTRAL_MODEL = "voxtral-mini-latest"
 DEFAULT_MAX_AUDIO_BYTES = 10 * 1024 * 1024
+STT_TIMEOUT_SECONDS = 30
 
 
 class VoiceTranscriptionResponse(BaseModel):
@@ -155,12 +157,17 @@ async def transcribe(
         content_type=file_content_type,
     )
     try:
-        result = await client.audio.transcriptions.complete_async(
-            model=VOXTRAL_MODEL,
-            file=mistral_file,
-            language=language,
-            timestamp_granularities=["segment"],
+        result = await asyncio.wait_for(
+            client.audio.transcriptions.complete_async(
+                model=VOXTRAL_MODEL,
+                file=mistral_file,
+                language=language,
+                timestamp_granularities=["segment"],
+            ),
+            timeout=STT_TIMEOUT_SECONDS,
         )
+    except TimeoutError as error:
+        raise HTTPException(status_code=504, detail="STT upstream timed out") from error
     except SDKError as error:
         raise _map_mistral_error(error) from error
 

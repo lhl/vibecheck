@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 
@@ -283,3 +285,33 @@ def test_segments_duration_ms_handles_edge_cases() -> None:
         end = 0.42
 
     assert voice_module._segments_duration_ms([_OkEnd()]) == 420
+
+
+@pytest.mark.asyncio
+async def test_voice_transcribe_returns_504_on_upstream_timeout(
+    client,
+    psk: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.routes.voice as voice_module
+
+    class _HangingTranscriptions:
+        async def complete_async(self, **kwargs):
+            await asyncio.sleep(999)
+
+    class _HangingAudio:
+        transcriptions = _HangingTranscriptions()
+
+    class _HangingClient:
+        audio = _HangingAudio()
+
+    monkeypatch.setattr(voice_module, "get_mistral_client", lambda: _HangingClient())
+    monkeypatch.setattr(voice_module, "STT_TIMEOUT_SECONDS", 0.01)
+
+    response = await client.post(
+        "/api/voice/transcribe",
+        headers={"X-PSK": psk, "Content-Type": "audio/webm"},
+        content=b"fake-audio",
+    )
+    assert response.status_code == 504
+    assert "timed out" in response.json().get("detail", "").lower()

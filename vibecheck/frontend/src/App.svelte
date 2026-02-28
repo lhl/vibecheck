@@ -37,6 +37,7 @@
 
   const initialSessionId = query.get('sid') || query.get('session_id') || loadStoredSessionId() || ''
   const initialAction = query.get('action') || ''
+  const initialCallId = query.get('call_id') || ''
 
   let psk = loadInitialPsk()
   let pskDraft = psk
@@ -127,7 +128,19 @@
     }
   }
 
-  async function handleNotificationAction(action, url) {
+  function callIdFromUrl(url) {
+    if (!url) {
+      return ''
+    }
+    try {
+      const parsed = new URL(url, window.location.origin)
+      return parsed.searchParams.get('call_id') || ''
+    } catch {
+      return ''
+    }
+  }
+
+  async function handleNotificationAction(action, url, callIdHint) {
     const normalized = typeof action === 'string' ? action.trim().toLowerCase() : ''
     if (normalized !== 'approve' && normalized !== 'deny') {
       return
@@ -150,8 +163,12 @@
         connectSocket()
       }
 
-      const state = await apiJson(`/api/sessions/${encodeURIComponent(targetSessionId)}/state`)
-      const callId = state?.pending_approval?.call_id || ''
+      // Prefer the call_id bound to the notification; fall back to current pending only if absent
+      let callId = (typeof callIdHint === 'string' && callIdHint) || callIdFromUrl(url) || ''
+      if (!callId) {
+        const state = await apiJson(`/api/sessions/${encodeURIComponent(targetSessionId)}/state`)
+        callId = state?.pending_approval?.call_id || ''
+      }
       if (!callId) {
         return
       }
@@ -169,6 +186,7 @@
         try {
           const parsed = new URL(url, window.location.origin)
           parsed.searchParams.delete('action')
+          parsed.searchParams.delete('call_id')
           window.history.replaceState({}, '', parsed.pathname + parsed.search)
         } catch {
           // no-op
@@ -382,7 +400,7 @@
       if (!payload || payload.type !== 'notification_action') {
         return
       }
-      handleNotificationAction(payload.action, payload.url)
+      handleNotificationAction(payload.action, payload.url, payload.call_id)
     }
 
     window.addEventListener('message', messageHandler)
@@ -390,7 +408,7 @@
     if (psk) {
       ;(async () => {
         try {
-          await handleNotificationAction(initialAction, window.location.href)
+          await handleNotificationAction(initialAction, window.location.href, initialCallId)
           await refreshSessions()
           startRefreshTimer()
 
