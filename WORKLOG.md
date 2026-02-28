@@ -2,6 +2,29 @@
 
 ## 2026-02-28
 
+### Phase 7 planning + UI design spec
+
+- Created `docs/PLAN-ui.md` — full PWA layout spec for Phase 7 polish:
+  - Fixed viewport layout: header (sticky top), message log (flex scroll), input bar (sticky bottom), status line (footer)
+  - Header: logo + session label + connection status (top-right), expands to session picker on tap
+  - Session picker: active sessions (controllable=true) sorted reverse-chron, title + ID prefix + age + attention icon
+  - Input bar: mic icon (left, hold=one-shot, tap=talker mode), textarea (center), send/cancel toggle (right)
+  - Status line: agent state (bottom-left), token/cost ticker (bottom-right, tap while running → big overlay)
+  - Notification overlay: 70% alpha shim below header, blocks input, stacks approval/question cards
+  - Talker mode (L7 stretch): tap mic toggles voice loop, input bar transforms to voice UI, TTS auto-plays responses
+  - Dark/light theme, mobile considerations (100dvh, safe areas, 44px touch targets)
+- Updated `docs/PLAN.md`:
+  - Session picker redesign spec (active=controllable, title from meta.json, attention badges)
+  - YOLO mode + live cost ticker as active L9 scope
+  - Camera/vision prototype cross-referenced in L8
+  - Explicit Deferred section with full specs: settings panel (intensity/snooze), diff viewer, offline cache, rate limiting, replay mode, confetti, live demo mode, QR code, per-tool trust levels
+- Updated `docs/IMPLEMENTATION.md`:
+  - WU-23: session picker redesign, dark theme, error/loading states, haptics
+  - WU-24: expose title from meta.json, resume + diff endpoints
+  - L8: camera/vision prototype cross-reference
+  - L9: YOLO mode + cost ticker specs, deferred items synced with PLAN.md
+- Created pixel-art PWA icon: 10×10 grid SVG with 5 Mistral-colored stripes + white checkmark, rendered to 192×192 and 512×512 PNGs
+
 ### Phase 6 follow-up review remediation
 - Fixed **High**: push notification actions now call-bound — payload includes `call_id`, SW threads it through to App.svelte, which uses it directly instead of fetching `/state` for "whatever is currently pending". Stale notifications can no longer approve the wrong tool call.
 - Fixed **Medium**: idle escalation now tracks all waiting sessions via `set[str]` instead of a single `_idle_session_id` slot. Concurrent sessions all receive escalation pushes.
