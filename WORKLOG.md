@@ -605,3 +605,14 @@
   - Added an integration assertion that approval push bodies use `generate_notification_copy()` (`vibecheck/tests/test_push.py`).
 - Verification:
   - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
+
+### Phase 6D review fixes (Translation hardening)
+- Frontend:
+  - Abort in-flight auto-translate requests on component destroy to avoid state updates after unmount (`vibecheck/frontend/src/components/ChatMessage.svelte`).
+  - Cap translation cache to 200 entries with eviction (`vibecheck/frontend/src/lib/translate.js`).
+  - Added regression coverage (`ChatMessage.test.js`, `translate.test.js`).
+- Backend:
+  - Expanded translate endpoint test coverage for validation, missing `MISTRAL_API_KEY`, SDKError mapping, and empty upstream output (`vibecheck/tests/test_translate.py`).
+- Verification:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
+  - `cd vibecheck/frontend && npm test && npm run build` -> pass.
