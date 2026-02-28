@@ -538,3 +538,16 @@
   - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
   - `cd vibecheck/frontend && npm test` -> pass.
   - `cd vibecheck/frontend && npm run build` -> success.
+
+### Phase 6C Smart notifications — Ministral (WU-22)
+- Added `vibecheck/notifications/manager.py` (`IntensityManager`) with level filtering, snooze, and escalating idle copy logic.
+- Added `vibecheck/notifications/ministral.py` helpers:
+  - `generate_notification_copy()` (<=80 chars)
+  - `summarize_tool_call()` (1-line)
+  - `classify_urgency()` (low/normal/high)
+- Wired push payload generation to use `IntensityManager` filtering and smarter approval bodies/urgency (`vibecheck/push.py`).
+- Added tests:
+  - `vibecheck/tests/test_intensity_manager.py`
+  - `vibecheck/tests/test_ministral_notifications.py`
+- Verification:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.

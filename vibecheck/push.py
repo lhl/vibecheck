@@ -19,6 +19,8 @@ from py_vapid.utils import b64urlencode
 from pywebpush import WebPushException, webpush_async
 
 from vibecheck.events import Event
+from vibecheck.notifications.manager import IntensityManager
+from vibecheck.notifications.ministral import classify_urgency, generate_notification_copy
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +59,7 @@ class PushManager:
     def __init__(self, *, storage_dir: Path | None = None) -> None:
         self._storage_dir = storage_dir or _default_storage_dir()
         self._lock = threading.Lock()
+        self.intensity = IntensityManager()
 
     @property
     def storage_dir(self) -> Path:
@@ -144,11 +147,12 @@ class PushManager:
         self._store_subscriptions(filtered)
         return True
 
-    def _notification_payload(self, session_id: str, event: Event) -> dict[str, Any] | None:
+    async def _notification_payload(self, session_id: str, event: Event) -> dict[str, Any] | None:
         if event.type == "approval_request":
+            body = await generate_notification_copy(event.tool_name, event.args)
             return {
                 "title": "Approval needed",
-                "body": event.tool_name,
+                "body": body or event.tool_name,
                 "requireInteraction": True,
                 "tag": f"approval:{event.call_id}",
                 "url": f"/?sid={session_id}",
@@ -191,13 +195,26 @@ class PushManager:
         )
 
     async def send_for_event(self, session_id: str, event: Event) -> None:
-        payload = self._notification_payload(session_id, event)
+        intensity_key: str | None = None
+        if event.type == "approval_request":
+            intensity_key = "approval"
+        elif event.type == "input_request":
+            intensity_key = "user_input"
+        elif event.type == "tool_result" and event.is_error:
+            intensity_key = "error"
+
+        if intensity_key and not self.intensity.should_notify(intensity_key):
+            return
+
+        payload = await self._notification_payload(session_id, event)
         if payload is None:
             return
 
         urgency = "normal"
         if payload.get("requireInteraction"):
             urgency = "high"
+        else:
+            urgency = await classify_urgency(event)
 
         subscriptions = self._load_subscriptions()
         if not subscriptions:
