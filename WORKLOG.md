@@ -479,3 +479,29 @@
 - Verification:
   - `cd vibecheck/frontend && npm test` -> 9 files passed, 36 tests passed.
   - `cd vibecheck/frontend && npm run build` -> success.
+
+### Phase 6 infra hardening (test + static serving)
+- Observed upstream transport hangs when exercising streaming responses + websocket tests in-process:
+  - `fastapi.testclient.TestClient` requests never completed under current dependency set (even for trivial apps).
+  - `httpx.ASGITransport` similarly hung on `FileResponse` / static file streaming reads.
+- Implemented stable in-process test + static behavior:
+  - `vibecheck/app.py` now serves `/`, `/manifest.json`, `/sw.js`, `/assets/*`, `/icons/*` via non-streaming byte `Response` reads (plus safe path join).
+  - Added `vibecheck/tests/asgi_ws.py` in-memory ASGI websocket harness.
+  - Migrated `vibecheck/tests/test_ws.py` + `vibecheck/tests/test_live_attach.py` off `TestClient` to async + in-memory websocket session.
+- Verification:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
+
+### Phase 6A Voice input (WU-17 + WU-18)
+- Backend (WU-17):
+  - Added `POST /api/voice/transcribe` (`vibecheck/routes/voice.py`) Voxtral proxy via Mistral SDK (`audio.transcriptions.complete_async`).
+  - Supports raw audio body or multipart upload; forwards `language` query param; returns `{text, language, duration_ms}`.
+  - Added tests in `vibecheck/tests/test_voice.py` with mocked Mistral client.
+- Frontend (WU-18):
+  - Added `MicButton.svelte` hold-to-record UI + duration counter; posts blob to `/api/voice/transcribe`.
+  - Added `lib/recorder.js` MediaRecorder helper and `lib/settings.js` for persisted voice language (JA/EN) selection.
+  - Wired `MicButton` into `InputBar.svelte` to insert transcription into the editable draft before send.
+  - Added/updated frontend tests (`MicButton.test.js`, `settings.test.js`).
+- Verification:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
+  - `cd vibecheck/frontend && npm test` -> pass.
+  - `cd vibecheck/frontend && npm run build` -> success.
