@@ -593,3 +593,15 @@
 - Verification:
   - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
   - `cd vibecheck/frontend && npm test && npm run build` -> pass.
+
+### Phase 6C review fixes (Smart notifications)
+- IntensityManager:
+  - `mark_idle()` no longer clears the per-threshold dedupe set (prevents repeated idle alerts on idle heartbeats).
+  - Clamp intensity level to 1–5 (covers init + runtime assignment) and route idle escalation through `should_notify("idle")`.
+- Ministral helpers:
+  - Truncate/compact `args` before embedding into prompts (caps prompt growth / cost).
+  - Truncate long fallback tool summaries (bounds intermediate strings).
+- Push:
+  - Added an integration assertion that approval push bodies use `generate_notification_copy()` (`vibecheck/tests/test_push.py`).
+- Verification:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
