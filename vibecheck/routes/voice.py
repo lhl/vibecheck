@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 router = APIRouter()
 
 VOXTRAL_MODEL = "voxtral-mini-latest"
+DEFAULT_MAX_AUDIO_BYTES = 10 * 1024 * 1024
 
 
 class VoiceTranscriptionResponse(BaseModel):
@@ -25,6 +26,24 @@ def get_mistral_client() -> Mistral:
     if not api_key:
         raise HTTPException(status_code=500, detail="MISTRAL_API_KEY is not set")
     return Mistral(api_key=api_key)
+
+
+def _max_audio_bytes() -> int:
+    configured = os.environ.get("VIBECHECK_MAX_AUDIO_BYTES")
+    if configured is None:
+        return DEFAULT_MAX_AUDIO_BYTES
+    try:
+        value = int(configured)
+    except ValueError:
+        return DEFAULT_MAX_AUDIO_BYTES
+    if value <= 0:
+        return DEFAULT_MAX_AUDIO_BYTES
+    return value
+
+
+def _guard_audio_size(*, size: int, max_bytes: int) -> None:
+    if size > max_bytes:
+        raise HTTPException(status_code=413, detail="Audio payload too large")
 
 
 def _segments_duration_ms(segments: Any) -> int:
@@ -59,6 +78,13 @@ async def transcribe(
     language: str = Query("ja"),
 ) -> VoiceTranscriptionResponse:
     content_type = request.headers.get("content-type") or ""
+    max_bytes = _max_audio_bytes()
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            _guard_audio_size(size=int(content_length), max_bytes=max_bytes)
+        except ValueError:
+            pass
     audio_bytes: bytes
     filename = "recording.webm"
     file_content_type: str | None = None
@@ -71,10 +97,12 @@ async def transcribe(
         if not hasattr(upload, "read"):
             raise HTTPException(status_code=400, detail="Audio file is required")
         audio_bytes = await upload.read()  # type: ignore[reportUnknownMemberType]
+        _guard_audio_size(size=len(audio_bytes), max_bytes=max_bytes)
         filename = getattr(upload, "filename", None) or filename
         file_content_type = getattr(upload, "content_type", None)
     else:
         audio_bytes = await request.body()
+        _guard_audio_size(size=len(audio_bytes), max_bytes=max_bytes)
         file_content_type = content_type or None
 
     if not audio_bytes:

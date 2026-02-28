@@ -92,3 +92,43 @@ async def test_voice_transcribe_accepts_multipart_upload(
     assert response.status_code == 200
     payload = response.json()
     assert payload["text"] == "konnichiwa"
+
+
+@pytest.mark.asyncio
+async def test_voice_transcribe_rejects_oversized_raw_audio(
+    client,
+    psk: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.routes.voice as voice_module
+
+    dummy = _DummyMistralClient()
+    monkeypatch.setattr(voice_module, "get_mistral_client", lambda: dummy)
+    monkeypatch.setenv("VIBECHECK_MAX_AUDIO_BYTES", "4")
+
+    response = await client.post(
+        "/api/voice/transcribe",
+        headers={"X-PSK": psk, "Content-Type": "audio/webm"},
+        content=b"12345",
+    )
+    assert response.status_code == 413
+
+
+@pytest.mark.asyncio
+async def test_voice_transcribe_rejects_oversized_multipart_upload(
+    client,
+    psk: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.routes.voice as voice_module
+
+    dummy = _DummyMistralClient()
+    monkeypatch.setattr(voice_module, "get_mistral_client", lambda: dummy)
+    monkeypatch.setenv("VIBECHECK_MAX_AUDIO_BYTES", "4")
+
+    response = await client.post(
+        "/api/voice/transcribe",
+        headers={"X-PSK": psk},
+        files={"audio": ("recording.webm", b"12345", "audio/webm")},
+    )
+    assert response.status_code == 413
