@@ -930,6 +930,15 @@ class SessionManager:
         self.logs_root = logs_root or (Path.home() / ".vibe" / "logs" / "session")
         self.connection_manager = connection_manager
         self.sessions: dict[str, SessionBridge] = {}
+        self._bridge_hooks: set[Callable[[SessionBridge], None]] = set()
+
+    def add_bridge_hook(self, hook: Callable[[SessionBridge], None]) -> None:
+        self._bridge_hooks.add(hook)
+        for bridge in self.sessions.values():
+            try:
+                hook(bridge)
+            except Exception:
+                logger.exception("Bridge hook failed for session %s", bridge.session_id)
 
     def set_connection_manager(self, connection_manager) -> None:
         self.connection_manager = connection_manager
@@ -999,6 +1008,11 @@ class SessionManager:
             connection_manager=self.connection_manager,
             attach_mode=mode,
         )
+        for hook in list(self._bridge_hooks):
+            try:
+                hook(bridge)
+            except Exception:
+                logger.exception("Bridge hook failed for session %s", session_id)
         self.sessions[session_id] = bridge
         return bridge
 

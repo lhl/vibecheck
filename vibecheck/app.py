@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse, Response
 
 from vibecheck.auth import PSKAuthMiddleware, load_psk
 from vibecheck.routes.api import router as api_router
+from vibecheck.routes.push import router as push_router
 from vibecheck.routes.voice import router as voice_router
 from vibecheck.ws import bind_session_manager
 from vibecheck.ws import router as ws_router
@@ -59,8 +60,19 @@ def create_app() -> FastAPI:
     app.add_middleware(PSKAuthMiddleware)
 
     app.include_router(api_router)
+    app.include_router(push_router)
     app.include_router(voice_router)
     app.include_router(ws_router)
+
+    from vibecheck.push import PushManager, attach_bridge, set_push_manager
+
+    push_manager = PushManager()
+    set_push_manager(push_manager)
+    app.state.push_manager = push_manager
+
+    import vibecheck.bridge as bridge_module
+
+    bridge_module.session_manager.add_bridge_hook(attach_bridge)
 
     static_dir = resolve_static_dir()
     assets_dir = static_dir / "assets"
