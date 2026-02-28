@@ -96,19 +96,23 @@ export async function unsubscribeFromPush(psk) {
     return true
   }
 
-  const endpoint = subscription.endpoint
-  await subscription.unsubscribe()
-
   const response = await fetch('/api/push/unsubscribe', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(psk ? { 'X-PSK': psk } : {}),
     },
-    body: JSON.stringify({ endpoint }),
+    body: JSON.stringify({ endpoint: subscription.endpoint }),
   })
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText}`.trim())
+  }
+
+  try {
+    await subscription.unsubscribe()
+  } catch {
+    // Best-effort: if the server successfully removed the subscription, we can still
+    // treat this as a successful unsubscribe request.
   }
 
   return true
@@ -117,4 +121,3 @@ export async function unsubscribeFromPush(psk) {
 export const __test__ = {
   urlBase64ToUint8Array,
 }
-
