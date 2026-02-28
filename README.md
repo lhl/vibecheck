@@ -215,6 +215,38 @@ This gives us a much cleaner, richer mobile experience than terminal scraping.
                                     └───────────────┘
 ```
 
+### How This Differs from Other Remoting UIs
+
+Most mobile-to-agent bridges work at the **terminal layer**. They run the agent in tmux and shuttle raw PTY bytes or scraped pane text to the phone:
+
+| Approach | What gets bridged | Phone experience |
+|----------|-------------------|------------------|
+| node-pty + WebSocket (e.g. Claude-Conduit) | Binary terminal frames at ~60 fps | xterm.js in a WebView — a tiny terminal |
+| `tmux send-keys` + `capture-pane` + HTTP | Plain text or ANSI, polled every 0.5-1.5 s | Rendered terminal output in a browser |
+| MCP over WebSocket (e.g. claude-code-bridge) | Abstract file/task ops, not terminal I/O | Tool results, no live agent view |
+
+These approaches treat the agent as a black-box terminal process. They work with any CLI tool, but the phone is always a remote terminal viewer.
+
+vibecheck takes a different path because Vibe exposes one: **typed Python events and async callbacks**. Instead of scraping terminal output, vibecheck runs in-process with Vibe's `AgentLoop` and receives structured `BaseEvent` objects (`AssistantEvent`, `ToolCallEvent`, `ToolResultEvent`, etc.) directly. The phone and terminal are parallel surfaces into the same session, not a remote view of one:
+
+```
+Terminal (Textual TUI) ──┐
+                         ├── same process, same AgentLoop
+Phone (PWA via WSS) ─────┘
+```
+
+What this enables:
+
+- **Native mobile rendering.** A `ToolCallEvent` becomes a tappable card with the tool name and args — not 40 columns of escape codes.
+- **Bidirectional control.** The phone resolves the same `asyncio.Future` that the terminal keyboard would. Approve a tool call from either surface; first to respond wins.
+- **No polling.** Events stream over WebSocket as structured JSON the moment they're emitted.
+- **No tmux, no PTY, no terminal emulation.** The mobile client gets the same semantic data the TUI gets.
+- **Typed session state.** Sessions are first-class Python objects with status, attach mode, and controllability — not tmux pane names.
+
+The tradeoff is scope: vibecheck is Vibe-specific. It hooks into `set_approval_callback`, `set_user_input_callback`, and `message_observer`, which are Vibe's interfaces. The terminal-scraping approaches work with any CLI tool. vibecheck chose depth over breadth.
+
+See [`docs/REMOTING-UI.md`](docs/REMOTING-UI.md) for detailed analysis of each architecture.
+
 ---
 
 ## Component Design

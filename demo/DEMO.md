@@ -298,7 +298,7 @@ Each beat is annotated with the **judging criteria** it targets:
 │  TERMINAL (left 50%)    │  SCRCPY (right 50%)      │
 │                         │  Phone showing vibecheck  │
 │  Starts: ASCII logo +   │  PWA — live the whole     │
-│  key points             │  time                     │
+│  architecture + bullets  │  time                     │
 │                         │                           │
 │  Then: Vibe running     │                           │
 │  (clear logo, show      │                           │
@@ -306,16 +306,39 @@ Each beat is annotated with the **judging criteria** it targets:
 └─────────────────────────┴──────────────────────────┘
 ```
 
+**Left pane content (static, visible during V1):**
+
+The left pane is a single terminal screen — not slides. Print it before recording starts, let it sit while the voiceover and phone demo play out. Clear it when transitioning to Vibe output (V2).
+
+```
+ ██▒   █▓ ██▓ ▄▄▄▄   ▓█████  ▄████▄   ██░ ██ ...
+                                                    (ASCII logo)
+ check your vibes from anywhere
+
+ ┌────────────┐
+ │ Phone PWA  │──WSS──▶ vibecheck bridge ──▶ Vibe AgentLoop
+ └────────────┘         (in-process)         (Devstral)
+
+ ✦ In-process with Vibe — no terminal scraping, no upstream changes
+ ✦ Approve tool calls from your phone
+ ✦ Push-to-talk voice (Voxtral STT)
+ ✦ Push notifications (Ministral copy)
+ ✦ EN↔JA translation (Mistral Large)
+ ✦ ElevenLabs TTS voice response
+```
+
+This gives the audience the "what" and "how" at a glance while the phone on the right is already live. The rest of the video is showing it all working.
+
 #### V1. Logo + Hook [0:00–0:15] — C, U
 
-Left: ASCII logo + key bullet points (tagline, model names, etc.).
+Left: ASCII logo + architecture line + feature bullets (printed to terminal, static).
 Right: Phone showing vibecheck PWA — already connected, session visible.
 
 > *"You vibecode. Your agent stops and waits for you. You've walked away. It just sits there."*
 
 > *"vibecheck — mission control for your Vibe agents, right from your phone."*
 
-(The logo sits on the left while the phone is already live on the right. Audience sees the product immediately.)
+(Logo and bullets sit on the left, phone is already live on the right. Audience reads the left while watching the product on the right. Don't narrate the bullets — the voiceover sells the problem, the left pane answers "what is this" for anyone reading ahead.)
 
 #### V2. Core Loop — Approve From Phone [0:15–0:50] — D, T, A
 
@@ -342,10 +365,10 @@ Right: Close the PWA (swipe away). Vibe hits an approval. Phone buzzes. Notifica
 
 #### V5. Feature Montage + Close [1:30–1:50] — A, T, C
 
-Left: Return to ASCII logo + key points (or keep Vibe running).
+Left: Return to ASCII logo + architecture bullets (same screen from V1).
 Right: Quick feature flashes on phone — session list with multiple agents, tap translate on a message (Japanese appears), intensity slider from Chill to Ralph.
 
-> *"Multi-session. Japanese translation. Four Mistral models plus ElevenLabs TTS — Devstral codes, Voxtral transcribes, Ministral notifies, Mistral Large translates, and ElevenLabs speaks it all back to you in Japanese or English. vibecheck. Check your vibes from anywhere."*
+> *"Multi-session fleet control. Japanese translation. Hooked straight into Vibe's event loop — no terminal scraping, no upstream changes. Devstral codes, Voxtral transcribes, Ministral notifies, Mistral Large translates, ElevenLabs speaks. vibecheck — check your vibes from anywhere."*
 
 **[END — ~1:50]** (10 seconds buffer)
 
@@ -388,11 +411,13 @@ Slide: ASCII art vibecheck logo fills the terminal. Clean, bold, sets the tone.
 ##### B3. Architecture + Models [0:35–0:55] — T, A
 
 Slide: Architecture diagram (Phone → HTTPS → EC2 → vibecheck bridge → Vibe AgentLoop).
-Below or next slide: Model list — one line each.
+Below: One-line model list.
 
-> *"We hook directly into Vibe's AgentLoop — typed events, clean callbacks, in-process. Four Mistral models plus ElevenLabs: Devstral codes, Voxtral transcribes your voice, Ministral writes smart notifications, Mistral Large translates — and ElevenLabs speaks it all back to you. Full voice loop."*
+> *"Most mobile bridges wrap a terminal — tmux, PTY, screen scraping. We tap directly into Vibe's AgentLoop. Same process runs the TUI and the phone UI — no upstream changes to Vibe. That means the phone gets structured events, not terminal bytes — so we can render native mobile UI, approve tool calls, inject voice, all without polling."*
 
-(Keep this tight — 20 seconds. The demo will show all of this working.)
+> *"Five models: Devstral codes, Voxtral transcribes, Ministral notifies, Mistral Large translates, ElevenLabs speaks. Let me show you."*
+
+(This is 20 seconds. One sentence on architecture, one on models, then demo. Don't linger — the demo proves it.)
 
 ##### B4. Transition [0:55–1:00] — D
 
@@ -503,7 +528,7 @@ QR code on screen → the live URL. ASCII logo returns behind it.
 | **Layout** | 50/50 the entire time (single screen capture) | Fullscreen slides → 50/50 demo |
 | **Slides** | Logo + key points on left terminal pane | 3 presenterm slides (logo, problem, arch) |
 | **Demo time** | ~75% of runtime | ~65% of runtime |
-| **Architecture** | Text on logo slide + voiceover | Slide with diagram, 20 seconds |
+| **Architecture** | One-line diagram + bullets on left pane (static) | Slide with diagram, 20s ("not terminal scraping") |
 | **Transitions** | Just clear the left pane (no cuts) | quit presenterm → resize to 50/50 |
 | **Audience interaction** | None (pre-recorded) | Hand raise, QR code, live reactions |
 | **Translation** | Phone-side feature flash | Quick live tap (15s) |
