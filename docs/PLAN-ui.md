@@ -138,6 +138,56 @@ For approval requests and input questions that need immediate attention.
 
 ---
 
+## Talker Mode (L7 Stretch)
+
+Full voice conversation loop: speak to your agent, hear it respond. Activated from the input bar mic icon. Requires ElevenLabs TTS backend (WU-29/30).
+
+**Activation:**
+- **Tap mic** = toggle talker mode on/off
+- **Hold mic** = one-shot voice input (existing behavior: record → transcribe → auto-send)
+- Mic icon changes appearance when talker mode is active (e.g. filled/pulsing vs outline)
+
+**Talker mode ON — input bar transforms:**
+
+```
+┌─────────────────────────────────────────┐
+│  🎙  LISTENING...  (pulsing)        [✕] │
+└─────────────────────────────────────────┘
+```
+
+- Replaces textarea + send button with voice state indicator
+- X button exits talker mode, restores normal input bar
+- Message log stays visible and updates as conversation flows
+
+**State cycle:**
+```
+listening → transcribing → agent running → speaking (TTS) → listening → ...
+```
+
+- **Listening**: mic active, pulsing indicator, capturing audio
+- **Transcribing**: mic off, spinner, Voxtral STT processing
+- **Agent running**: transcribed text auto-sent, waiting for response (message log updates in real time)
+- **Speaking**: ElevenLabs TTS plays agent response aloud, speaker icon animates
+- **→ Listening**: auto-cycles back after TTS finishes, ready for next turn
+
+**Interrupts:**
+- Tap voice area during speaking → stop TTS playback, return to listening
+- Approval/input request → notification overlay takes over as normal, talker mode pauses
+- After approval resolved → talker mode resumes
+- Cancel button (if agent running) → same as text mode cancel
+
+**What stays the same:**
+- Message log keeps updating — user sees transcribed bubbles + agent text responses
+- Header, status line, notification overlay all work normally
+- Cost ticker updates in real time
+
+**What changes:**
+- Input bar replaced by voice state UI
+- Agent responses auto-play as TTS audio (ElevenLabs)
+- No manual typing while in talker mode (exit to type)
+
+---
+
 ## Dark / Light Theme
 
 - CSS custom properties for all colors
