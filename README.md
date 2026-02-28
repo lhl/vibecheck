@@ -24,7 +24,7 @@
 # Required: API auth for both REST + WebSocket (the PWA will prompt for this)
 export VIBECHECK_PSK=YOUR_PSK
 
-# Optional: required for voice + translation (push copy uses Ministral when set)
+# Optional: enables cloud Devstral (Vibe) + voice/translation (push copy uses Ministral when set)
 export MISTRAL_API_KEY=YOUR_KEY
 
 # Recommended: Vibe TUI + vibecheck bridge (defaults to :7870)
