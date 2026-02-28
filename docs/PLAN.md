@@ -290,7 +290,8 @@ Multi-session *discovery and switching* is built into L1/L2. This layer adds act
 - [ ] `POST /api/sessions` — spawn a new Vibe instance from mobile (project path + initial prompt)
 - [ ] `DELETE /api/sessions/{session_id}` — gracefully stop a Vibe session
 - [ ] Cross-agent context sharing (copy output from Agent A → input to Agent B)
-- [ ] Camera input: snap photo → Mistral Large 3 (multimodal) analyzes → context for Vibe
+- [ ] Camera/gallery input: snap photo or upload → Mistral Large 3 (multimodal) analyzes → context for Vibe
+  - **Prior art:** `frontend-prototype/` has working vision endpoint + camera/gallery UI + tests. Port to `vibecheck/routes/vision.py`.
 - [ ] Screenshot relay: periodic dev machine captures → Large 3 summarizes → phone
 - [ ] File browser: browse & preview project files from mobile
 

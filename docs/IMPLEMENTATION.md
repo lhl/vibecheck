@@ -1473,7 +1473,8 @@ scripts/smoke_test.sh http://localhost:7870
 ### L8: Spawn/Orchestrate & Rich Media
 
 - [ ] L8: Spawn/kill sessions from mobile (`POST/DELETE /api/sessions`)
-- [ ] L8: Camera → Mistral Large 3 multimodal (use Proto 4)
+- [ ] L8: Camera/gallery → Mistral Large 3 multimodal → context for Vibe
+  - **Prior art:** `frontend-prototype/server/server/app.py` has working `POST /api/vision` endpoint (base64 upload → Mistral `mistral-large-latest` multimodal, MIME validation, size guard, error mapping). `frontend-prototype/frontend/src/App.svelte` has camera capture (`capture="environment"`), gallery upload, image preview, describe flow with state machine + stale-request guards. `frontend-prototype/server/tests/test_api.py` has vision endpoint test coverage (success, missing image, unsupported MIME, oversized, upstream errors). Also `prototypes/camera-capture/` has a standalone camera capture prototype. Port vision endpoint to `vibecheck/routes/vision.py`, add PSK auth, wire FE camera/gallery UI into chat.
 
 ### L9: Smart Autonomy & Showmanship
 
