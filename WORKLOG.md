@@ -551,3 +551,10 @@
   - `vibecheck/tests/test_ministral_notifications.py`
 - Verification:
   - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
+
+### Phase 5 integration watch item: prompt `user_message` echo
+- `SessionBridge.inject_message()` now immediately emits a `user_message` event so mobile UI can render the user's message without optimistic bubbles.
+- Added lightweight content+time dedupe so a later Vibe echo (raw event or message observer) doesn't double-render the same message.
+- Added test coverage in `vibecheck/tests/test_bridge.py`.
+- Verification:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/test_bridge.py -v` -> pass.

@@ -9,6 +9,7 @@ import logging
 from collections import deque
 from pathlib import Path
 import sys
+import time
 from typing import Any, Callable, Literal
 from uuid import uuid4
 
@@ -104,6 +105,7 @@ class SessionBridge:
         self._agent_loop: object | None = None
         self._vibe_runtime: VibeRuntime | None = None
         self._observed_message_ids: set[str] = set()
+        self._local_user_message_echoes: deque[tuple[str, float]] = deque(maxlen=20)
         self._message_observer_hooked = False
         self._local_approval_callback: Callable[[str, object, str], object] | None = None
         self._local_input_callback: Callable[[object], object] | None = None
@@ -680,6 +682,8 @@ class SessionBridge:
         if role_value == "assistant":
             self._broadcast_background(AssistantEvent(content=content))
         elif role_value == "user":
+            if self._consume_local_user_message_echo(content):
+                return
             self._broadcast_background(UserMessageEvent(content=content))
 
     def _convert_vibe_event(self, raw_event: object) -> Event | None:
@@ -692,6 +696,8 @@ class SessionBridge:
                     return None
                 self._observed_message_ids.add(message_id)
             content = getattr(raw_event, "content", "")
+            if self._consume_local_user_message_echo(str(content)):
+                return None
             return UserMessageEvent(content=str(content))
 
         if kind.endswith("AssistantEvent"):
@@ -857,6 +863,33 @@ class SessionBridge:
         self._ensure_message_worker()
         await self._message_queue.join()
 
+    def _broadcast_local_user_message(self, content: str) -> None:
+        cleaned = content.strip()
+        if not cleaned:
+            return
+        self._local_user_message_echoes.append((cleaned, time.monotonic()))
+        self._broadcast_background(UserMessageEvent(content=cleaned))
+
+    def _consume_local_user_message_echo(self, content: str, *, window_s: float = 60.0) -> bool:
+        cleaned = content.strip()
+        if not cleaned:
+            return False
+
+        now = time.monotonic()
+        while self._local_user_message_echoes and now - self._local_user_message_echoes[0][1] > window_s:
+            self._local_user_message_echoes.popleft()
+
+        for entry in list(self._local_user_message_echoes):
+            if entry[0] != cleaned:
+                continue
+            try:
+                self._local_user_message_echoes.remove(entry)
+            except ValueError:
+                pass
+            return True
+
+        return False
+
     def inject_message(self, content: str) -> bool:
         self.messages_to_inject.append(content)
         if not self.controllable:
@@ -867,18 +900,18 @@ class SessionBridge:
             try:
                 self._ensure_agent_loop()
             except RuntimeError:
-                self._broadcast_background(UserMessageEvent(content=content))
+                self._broadcast_local_user_message(content)
                 self._set_state("idle")
                 return False
 
         self._set_state("running")
+        self._broadcast_local_user_message(content)
         self._message_queue.put_nowait(content)
         try:
             self._ensure_message_worker()
         except RuntimeError:
             # If no running loop is available, keep the message queued for the next
             # async context and still reflect the message in UI immediately.
-            self._broadcast_background(UserMessageEvent(content=content))
             self._set_state("idle")
             return False
         return True

@@ -151,6 +151,34 @@ class FakeAgentLoop:
         yield FakeAssistantEvent(content=f"done {answer}", message_id="m-assistant-1")
 
 
+class FakeAgentLoopNoUserEcho(FakeAgentLoop):
+    async def act(self, msg: str):
+        _ = msg
+        if self.message_observer:
+            self.message_observer(
+                FakeObservedMessage(
+                    role="assistant",
+                    content="observer-ping",
+                    message_id="m-observer-1",
+                )
+            )
+
+        args = FakeToolArgs(command="ls -la")
+        yield FakeToolCallEvent(tool_name="bash", args=args, tool_call_id="tc-1")
+        approval, _feedback = await self.approval_callback("bash", args, "tc-1")
+        if approval == FakeApprovalResponse.NO:
+            yield FakeToolResultEvent(tool_call_id="tc-1", error="denied")
+            return
+
+        response = await self.user_input_callback(FakeAskUserQuestionArgs())
+        answer = response.answers[0].answer
+        yield FakeToolResultEvent(
+            tool_call_id="tc-1",
+            result=FakeToolResult(answer=answer, command=args.command),
+        )
+        yield FakeAssistantEvent(content=f"done {answer}", message_id="m-assistant-1")
+
+
 async def _wait_until(predicate, *, attempts: int = 100) -> None:
     for _ in range(attempts):
         if predicate():
@@ -314,9 +342,54 @@ async def test_inject_message_lazily_starts_agent_loop_when_runtime_is_available
     await _wait_until(lambda: bridge.state == "idle")
 
     event_types = [event["type"] for _, event in manager.events]
+    user_messages = [
+        event for _, event in manager.events if event["type"] == "user_message" and event["content"] == "from-api"
+    ]
+    assert len(user_messages) == 1
     assert bridge.messages_to_inject[-1] == "from-api"
     assert "tool_call" in event_types
     assert "tool_result" in event_types
+
+    bridge.stop()
+
+
+@pytest.mark.asyncio
+async def test_inject_message_broadcasts_user_message_even_when_agent_loop_does_not_echo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.bridge as bridge_module
+
+    runtime = bridge_module.VibeRuntime(
+        agent_loop_cls=FakeAgentLoopNoUserEcho,
+        vibe_config_cls=FakeVibeConfig,
+        approval_yes=FakeApprovalResponse.YES,
+        approval_no=FakeApprovalResponse.NO,
+        ask_result_cls=FakeAskUserQuestionResult,
+        answer_cls=FakeAnswer,
+    )
+    monkeypatch.setattr(bridge_module, "load_vibe_runtime", lambda: runtime)
+
+    manager = RecordingConnectionManager()
+    bridge = SessionBridge("lazy-echo", connection_manager=manager)
+
+    assert bridge.inject_message("from-api")
+    await _wait_until(
+        lambda: any(
+            event["type"] == "user_message" and event["content"] == "from-api" for _, event in manager.events
+        )
+    )
+
+    await _wait_until(lambda: "tc-1" in bridge.pending_approval)
+    assert bridge.resolve_approval("tc-1", approved=True)
+    await _wait_until(lambda: len(bridge.pending_input) == 1)
+    request_id = next(iter(bridge.pending_input.keys()))
+    assert bridge.resolve_input(request_id=request_id, response="yes")
+    await _wait_until(lambda: bridge.state == "idle")
+
+    user_messages = [
+        event for _, event in manager.events if event["type"] == "user_message" and event["content"] == "from-api"
+    ]
+    assert len(user_messages) == 1
 
     bridge.stop()
 
