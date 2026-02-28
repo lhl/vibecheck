@@ -50,6 +50,18 @@ This document captures legitimate follow-ups identified during Phase 7 session w
   - Add cleanup on session end / disconnect / timeouts for pending reads.
   - Move imports (e.g., `difflib`) to module top-level.
 
+## P3 — Origin-aware user bubble rendering (Gap 2 hardening)
+
+- **Context:** WU-35 mounts a `UserMessage` widget in the Textual TUI on raw Vibe `UserMessageEvent` so phone-originated prompts are visible, with a FIFO *content-based* one-shot dedupe queue to avoid double-mounting locally-typed prompts.
+- **Problem:** Content-only dedupe can suppress the wrong user bubble if a phone-originated prompt has the same rendered content as the next locally-marked prompt and the phone turn’s raw `UserMessageEvent` is processed first (rare, but possible during queue interleaving).
+- **Possible approaches:**
+  - Track turn origin at enqueue time (e.g., extend `SessionBridge.inject_message(..., origin=Literal["tui","remote"])` or use a task-local `contextvar`), and store queued turns as structured payloads instead of raw strings.
+  - Expose current-turn origin to the TUI bridge (e.g., `TuiBridge(..., origin_getter=Callable[[], str | None])` or pass metadata alongside raw events).
+  - Gate mounting on origin, not content: `origin=="tui"` → skip mount (Vibe already mounted), `origin=="remote"` → mount bubble.
+- **Tests to add:**
+  - Two queued turns with identical content (`"X"`) where the first is `remote` and second is `tui`: TUI mounts the first bubble and skips the second without relying on content matching.
+  - Phone prompts still mount even when identical to the most recent local prompt.
+
 ## P4 — Misc cleanup / robustness
 
 - Remove duplicated light-theme CSS blocks in the frontend if still present.
