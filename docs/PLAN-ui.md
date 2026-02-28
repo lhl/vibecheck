@@ -83,9 +83,9 @@ Full height = `100dvh` (dynamic viewport height for mobile browser chrome). Layo
 
 **Layout:**
 - Pinned to bottom of message log area
-- Textarea (auto-grow to ~3 lines max, then scroll internally)
+- Mic icon (left side, hold-to-record — no timer display, just icon state change while recording)
+- Textarea (center, auto-grow to ~3 lines max, then scroll internally)
 - Send button (right side)
-- Mic button (left side, hold-to-record)
 - Auto-translate toggle (inline, existing)
 
 **Behavior:**
