@@ -293,17 +293,21 @@ Multi-session *discovery and switching* is built into L1/L2. This layer adds act
 
 - [ ] **YOLO mode**: hidden toggle that auto-approves all tool calls — reveal during demo for showmanship. `_approval_callback` short-circuits, still logs auto-approved events to timeline. Toggle off to resume manual approval.
 - [ ] **Live token/cost ticker**: real-time `$X.XX | YK tokens` in header, reads from Vibe `agent_loop.stats`. Audience watches charges rack up live.
-- [ ] Per-tool trust levels: auto-approve `read_file`, always ask for `bash`, etc.
-- [ ] Time-boxed autonomy: "run free for 10 minutes, then check in"
-- [ ] Risk scoring: color-code tool calls by danger level (green/yellow/red)
 - [ ] Live demo mode: public read-only URL for judges/audience
 - [ ] QR code on slide → instant audience participation
-- [ ] Replay mode: speed-run playback of a full agent session
-- [ ] Confetti animation on task completion 🎉
 
 ### Deferred (Post-Hackathon)
 
 Features designed but deferred to keep scope tight for submission. Details preserved here so nothing is lost.
+
+**Autonomy refinements** (L9):
+- Per-tool trust levels: auto-approve `read_file`, always ask for `bash`, etc.
+- Time-boxed autonomy: "run free for 10 minutes, then check in"
+- Risk scoring: color-code tool calls by danger level (green/yellow/red)
+
+**Showmanship** (L9):
+- Replay mode: speed-run playback of a full agent session (scrub through event timeline at 10x, great for recap demos)
+- Confetti animation on task completion
 
 **Settings panel** (`SettingsPanel.svelte`):
 - Dedicated settings component (currently settings are inline in the picker area, which works fine for now)
