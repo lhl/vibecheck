@@ -164,11 +164,16 @@ async def test_fleet_state_aggregates(api_client) -> None:
     [
         ("get", "/api/state", None),
         ("get", "/api/sessions", None),
+        ("get", "/api/push/vapid-key", None),
         ("get", "/api/sessions/session-a/state", None),
         ("get", "/api/sessions/session-a", None),
         ("post", "/api/sessions/session-a/message", {"content": "hi"}),
         ("post", "/api/sessions/session-a/approve", {"call_id": "tc-1", "approved": True}),
         ("post", "/api/sessions/session-a/input", {"request_id": "req-1", "response": "ok"}),
+        ("post", "/api/push/subscribe", {"endpoint": "https://example.com/push/abc", "keys": {"p256dh": "p", "auth": "a"}}),
+        ("post", "/api/push/unsubscribe", {"endpoint": "https://example.com/push/abc"}),
+        ("post", "/api/translate", {"text": "Hello", "target_lang": "ja"}),
+        ("post", "/api/voice/transcribe", {"fake": "audio"}),
     ],
 )
 async def test_protected_endpoints_require_psk(api_client, method: str, path: str, json_body: dict | None) -> None:
