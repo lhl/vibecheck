@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 
 from httpx import ASGITransport, AsyncClient
@@ -62,6 +63,8 @@ async def test_push_sends_notification_on_approval_request(
 ) -> None:
     _ = push_home
 
+    monkeypatch.setenv("VIBECHECK_VAPID_SUB", "mailto:tests@example.com")
+
     calls: list[dict[str, object]] = []
 
     async def fake_webpush(*, subscription_info, data=None, vapid_private_key=None, vapid_claims=None, **_kwargs):
@@ -108,6 +111,36 @@ async def test_push_sends_notification_on_approval_request(
     assert calls, "expected pywebpush.webpush to be called"
     payload = calls[0]["data"]
     assert isinstance(payload, str) and "requireInteraction" in payload
+    assert calls[0]["vapid_claims"] == {"sub": "mailto:tests@example.com"}
 
     assert bridge.resolve_approval("tc-push-1", approved=True)
     await task
+
+
+def test_vapid_keypair_regenerates_when_keys_file_is_corrupt(
+    push_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.push as push_module
+
+    storage_dir = push_home / ".vibecheck"
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    keys_path = storage_dir / "vapid_keys.json"
+    keys_path.write_text("{not-json", encoding="utf-8")
+
+    monkeypatch.setattr(
+        push_module,
+        "_generate_vapid_keypair",
+        lambda: push_module.VapidKeypair(public_key="public", private_key="private"),
+    )
+
+    manager = push_module.PushManager(storage_dir=storage_dir)
+    keypair = manager.get_or_create_vapid_keypair()
+    assert keypair.public_key == "public"
+    assert keypair.private_key == "private"
+
+    payload = json.loads(keys_path.read_text(encoding="utf-8"))
+    assert payload["public_key"] == "public"
+    assert payload["private_key"] == "private"
+
+    assert (keys_path.stat().st_mode & 0o777) == 0o600

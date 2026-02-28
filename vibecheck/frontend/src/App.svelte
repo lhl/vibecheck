@@ -36,6 +36,7 @@
   const query = new URLSearchParams(window.location.search)
 
   const initialSessionId = query.get('sid') || query.get('session_id') || loadStoredSessionId() || ''
+  const initialAction = query.get('action') || ''
 
   let psk = loadInitialPsk()
   let pskDraft = psk
@@ -51,6 +52,7 @@
   let autoTranslateEnabled = loadAutoTranslateEnabled()
   let notificationsError = ''
   let notificationsBusy = false
+  let notificationActionBusy = false
 
   $: pushSupported = isPushSupported()
 
@@ -111,6 +113,72 @@
     }
 
     return null
+  }
+
+  function sessionIdFromUrl(url) {
+    if (!url) {
+      return ''
+    }
+    try {
+      const parsed = new URL(url, window.location.origin)
+      return parsed.searchParams.get('sid') || parsed.searchParams.get('session_id') || ''
+    } catch {
+      return ''
+    }
+  }
+
+  async function handleNotificationAction(action, url) {
+    const normalized = typeof action === 'string' ? action.trim().toLowerCase() : ''
+    if (normalized !== 'approve' && normalized !== 'deny') {
+      return
+    }
+
+    if (!psk || notificationActionBusy) {
+      return
+    }
+
+    const targetSessionId = sessionIdFromUrl(url) || sessionId
+    if (!targetSessionId) {
+      return
+    }
+
+    notificationActionBusy = true
+    try {
+      if (targetSessionId !== sessionId) {
+        sessionId = targetSessionId
+        storeSessionId(targetSessionId)
+        connectSocket()
+      }
+
+      const state = await apiJson(`/api/sessions/${encodeURIComponent(targetSessionId)}/state`)
+      const callId = state?.pending_approval?.call_id || ''
+      if (!callId) {
+        return
+      }
+
+      const approved = normalized === 'approve'
+      await apiJson(`/api/sessions/${encodeURIComponent(targetSessionId)}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ call_id: callId, approved }),
+      })
+
+      handleApprovalResolved(callId, approved)
+
+      if (typeof url === 'string' && url && url.includes('action=')) {
+        try {
+          const parsed = new URL(url, window.location.origin)
+          parsed.searchParams.delete('action')
+          window.history.replaceState({}, '', parsed.pathname + parsed.search)
+        } catch {
+          // no-op
+        }
+      }
+    } catch {
+      // best-effort: action buttons should never block opening the app
+    } finally {
+      notificationActionBusy = false
+    }
   }
 
   async function refreshSessions() {
@@ -308,16 +376,35 @@
     }
   }
 
-  onMount(async () => {
-    if (!psk) {
-      return
+  onMount(() => {
+    const messageHandler = (event) => {
+      const payload = event?.data
+      if (!payload || payload.type !== 'notification_action') {
+        return
+      }
+      handleNotificationAction(payload.action, payload.url)
     }
 
-    await refreshSessions()
-    startRefreshTimer()
+    window.addEventListener('message', messageHandler)
 
-    if (sessionId) {
-      connectSocket()
+    if (psk) {
+      ;(async () => {
+        try {
+          await handleNotificationAction(initialAction, window.location.href)
+          await refreshSessions()
+          startRefreshTimer()
+
+          if (sessionId) {
+            connectSocket()
+          }
+        } catch {
+          // no-op
+        }
+      })()
+    }
+
+    return () => {
+      window.removeEventListener('message', messageHandler)
     }
   })
 

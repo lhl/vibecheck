@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -74,14 +75,37 @@ class PushManager:
     def _ensure_storage_dir(self) -> None:
         self._storage_dir.mkdir(parents=True, exist_ok=True)
 
+    def _vapid_sub_claim(self) -> str:
+        configured = os.environ.get("VIBECHECK_VAPID_SUB")
+        if isinstance(configured, str):
+            cleaned = configured.strip()
+            if cleaned:
+                return cleaned
+        return "mailto:vibecheck@localhost"
+
+    def _restrict_secret_file(self, path: Path) -> None:
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            return
+
     def get_or_create_vapid_keypair(self) -> VapidKeypair:
         with self._lock:
             path = self._keys_path()
             if path.exists():
-                payload = json.loads(path.read_text(encoding="utf-8"))
-                public_key = str(payload.get("public_key", "")).strip()
-                private_key = str(payload.get("private_key", "")).strip()
+                payload: object
+                try:
+                    payload = json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    payload = {}
+
+                public_key = ""
+                private_key = ""
+                if isinstance(payload, dict):
+                    public_key = str(payload.get("public_key", "")).strip()
+                    private_key = str(payload.get("private_key", "")).strip()
                 if public_key and private_key:
+                    self._restrict_secret_file(path)
                     return VapidKeypair(public_key=public_key, private_key=private_key)
 
             self._ensure_storage_dir()
@@ -96,6 +120,7 @@ class PushManager:
                 + "\n",
                 encoding="utf-8",
             )
+            self._restrict_secret_file(path)
             return keypair
 
     def public_key(self) -> str:
@@ -189,7 +214,7 @@ class PushManager:
             subscription_info=subscription,
             data=data,
             vapid_private_key=keypair.private_key,
-            vapid_claims={"sub": "mailto:vibecheck@localhost"},
+            vapid_claims={"sub": self._vapid_sub_claim()},
             headers={"Urgency": urgency},
             ttl=3600 if payload.get("requireInteraction") else 300,
         )

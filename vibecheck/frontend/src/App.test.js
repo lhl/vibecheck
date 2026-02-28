@@ -100,6 +100,63 @@ describe('App phase 4 shell', () => {
     expect(button).toHaveTextContent('Disable auto-translate')
   })
 
+  it('handles push approve action by resolving the pending approval via REST', async () => {
+    localStorage.setItem('vibecheck_psk', 'dev-psk')
+    window.history.pushState({}, '', '/?sid=s-1&action=approve')
+
+    const fetchSpy = vi.fn((resource, options = {}) => {
+      if (resource === '/api/sessions') {
+        return Promise.resolve(
+          new Response(JSON.stringify([{ id: 's-1', status: 'running' }]), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        )
+      }
+
+      if (resource === '/api/sessions/s-1/state') {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              state: 'waiting_approval',
+              attach_mode: 'observe_only',
+              controllable: false,
+              pending_approval: { call_id: 'tc-1', tool_name: 'bash', args: {} },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        )
+      }
+
+      if (resource === '/api/sessions/s-1/approve' && options.method === 'POST') {
+        return Promise.resolve(
+          new Response(JSON.stringify({ status: 'ok' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))
+    })
+
+    vi.stubGlobal('fetch', fetchSpy)
+
+    render(App)
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/sessions/s-1/approve',
+        expect.objectContaining({ method: 'POST' }),
+      )
+    })
+
+    const approveCall = fetchSpy.mock.calls.find((call) => call[0] === '/api/sessions/s-1/approve')
+    expect(approveCall).toBeTruthy()
+    const body = approveCall[1]?.body ? JSON.parse(approveCall[1].body) : null
+    expect(body).toMatchObject({ call_id: 'tc-1', approved: true })
+  })
+
   it('shows new message button when user is scrolled up', async () => {
     localStorage.setItem('vibecheck_psk', 'dev-psk')
     localStorage.setItem('vibecheck_sid', 's-1')
