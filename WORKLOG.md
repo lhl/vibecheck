@@ -463,3 +463,19 @@
 - Verification:
   - `cd vibecheck/frontend && npm test` -> 9 files passed, 33 tests passed.
   - `cd vibecheck/frontend && npm run build` -> success (`vibecheck/static/` updated).
+
+### Phase 4 reviewer pass 2 (remaining gaps)
+- Addressed remaining post-review deltas that were still valid after `cddc7de`:
+  - `vibecheck/frontend/src/lib/ws.js`
+    - Added terminal close-code handling for WebSocket auth/session terminal failures (`4401`, `4404`).
+    - Client now stops auto-reconnect and transitions to `disconnected` immediately for terminal codes; reconnect resumes only on explicit `connect()`.
+  - `vibecheck/frontend/src/components/ConnectionStatus.svelte`
+    - Updated connecting label logic: `Connecting` before first retry, `Reconnecting (n)` once retries begin.
+- Added regression coverage:
+  - `vibecheck/frontend/src/lib/ws.test.js`
+    - close-code terminal behavior coverage for `4401` and `4404`.
+  - `vibecheck/frontend/src/components/ConnectionStatus.test.js`
+    - first-connect `Connecting` label coverage.
+- Verification:
+  - `cd vibecheck/frontend && npm test` -> 9 files passed, 36 tests passed.
+  - `cd vibecheck/frontend && npm run build` -> success.

@@ -21,4 +21,13 @@ describe('ConnectionStatus', () => {
 
     expect(screen.getByText(/Reconnecting/)).toHaveTextContent('Reconnecting (3)')
   })
+
+  it('shows Connecting label before first reconnect attempt', () => {
+    render(ConnectionStatus, {
+      status: 'connecting',
+      reconnectAttempts: 0,
+    })
+
+    expect(screen.getByText('Connecting')).toBeInTheDocument()
+  })
 })

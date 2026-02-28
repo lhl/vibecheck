@@ -140,6 +140,24 @@ describe('createWebSocket', () => {
     expect(get(connection).status).toBe('disconnected')
   })
 
+  it.each([4401, 4404])(
+    'does not reconnect on terminal websocket close code %s',
+    (terminalCloseCode) => {
+      const client = createWebSocket('/ws/events/s-1', 'dev-psk')
+      client.connect()
+
+      const socket = MockWebSocket.instances[0]
+      socket.open()
+      socket.close(terminalCloseCode)
+
+      expect(get(connection).status).toBe('disconnected')
+      expect(get(connection).reconnectAttempts).toBe(0)
+
+      vi.advanceTimersByTime(60000)
+      expect(MockWebSocket.instances).toHaveLength(1)
+    },
+  )
+
   it('closes stale connection when heartbeat is missed', () => {
     const client = createWebSocket('/ws/events/s-1', 'dev-psk')
     client.connect()

@@ -4,6 +4,7 @@ import { CONNECTION_STATES, setConnection } from '../stores/connection'
 const HEARTBEAT_TIMEOUT_MS = 45_000
 const RECONNECT_BASE_MS = 1_000
 const RECONNECT_CAP_MS = 30_000
+const TERMINAL_CLOSE_CODES = new Set([4401, 4404])
 
 function withPsk(url, psk) {
   if (!psk) {
@@ -89,9 +90,17 @@ export function createWebSocket(url, psk) {
     }
   }
 
-  const handleClose = () => {
+  const handleClose = (event) => {
     clearHeartbeatTimer()
     socket = null
+
+    if (TERMINAL_CLOSE_CODES.has(Number(event?.code))) {
+      clearReconnectTimer()
+      reconnectAttempts = 0
+      shouldReconnect = false
+      setConnection(CONNECTION_STATES.DISCONNECTED, 0)
+      return
+    }
 
     if (!shouldReconnect) {
       setConnection(CONNECTION_STATES.DISCONNECTED, reconnectAttempts)

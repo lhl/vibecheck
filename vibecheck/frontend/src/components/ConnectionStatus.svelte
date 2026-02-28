@@ -2,13 +2,14 @@
   export let status = 'disconnected'
   export let reconnectAttempts = 0
 
-  const statusCopy = {
-    connected: 'Connected',
-    connecting: 'Reconnecting',
-    disconnected: 'Disconnected',
-  }
-
-  $: label = statusCopy[status] || 'Disconnected'
+  $: label =
+    status === 'connected'
+      ? 'Connected'
+      : status === 'connecting'
+        ? reconnectAttempts > 0
+          ? 'Reconnecting'
+          : 'Connecting'
+        : 'Disconnected'
 </script>
 
 <div class="connection-status">
