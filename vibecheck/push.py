@@ -61,6 +61,58 @@ class PushManager:
         self._storage_dir = storage_dir or _default_storage_dir()
         self._lock = threading.Lock()
         self.intensity = IntensityManager()
+        self._idle_session_id: str | None = None
+        self._idle_task: asyncio.Task[None] | None = None
+
+    def _cancel_idle_task(self) -> None:
+        task = self._idle_task
+        if task is None:
+            return
+        if not task.done():
+            task.cancel()
+        self._idle_task = None
+
+    def _ensure_idle_task(self) -> None:
+        task = self._idle_task
+        if task is not None and not task.done():
+            return
+
+        loop = asyncio.get_running_loop()
+        task = loop.create_task(self._idle_worker())
+
+        def _swallow(task: asyncio.Task[None]) -> None:
+            if task.cancelled():
+                return
+            try:
+                task.exception()
+            except Exception:
+                return
+
+        task.add_done_callback(_swallow)
+        self._idle_task = task
+
+    async def _idle_worker(self) -> None:
+        while True:
+            await asyncio.sleep(60)
+            await self._send_idle_escalation_if_needed()
+
+    def _handle_bridge_state(self, session_id: str, state: str) -> None:
+        normalized = state.strip().lower()
+        if not normalized:
+            return
+
+        if normalized in {"waiting_approval", "waiting_input"}:
+            if self._idle_session_id != session_id:
+                self.intensity.mark_active()
+                self._idle_session_id = session_id
+            self.intensity.mark_idle()
+            self._ensure_idle_task()
+            return
+
+        if self._idle_session_id == session_id:
+            self._idle_session_id = None
+            self.intensity.mark_active()
+            self._cancel_idle_task()
 
     @property
     def storage_dir(self) -> Path:
@@ -219,7 +271,43 @@ class PushManager:
             ttl=3600 if payload.get("requireInteraction") else 300,
         )
 
+    async def _send_idle_escalation_if_needed(self) -> None:
+        session_id = self._idle_session_id
+        if not session_id:
+            return
+
+        message = self.intensity.get_idle_message()
+        if message is None:
+            return
+
+        title, body = message
+        payload = {
+            "title": title,
+            "body": body,
+            "requireInteraction": False,
+            "tag": f"idle:{session_id}",
+            "url": f"/?sid={session_id}",
+        }
+
+        subscriptions = self._load_subscriptions()
+        if not subscriptions:
+            return
+
+        for subscription in subscriptions:
+            try:
+                await self._send_notification(subscription=subscription, payload=payload, urgency="low")
+            except WebPushException:
+                logger.exception("idle push send failed for session %s", session_id)
+            except Exception:
+                logger.exception("idle push crashed for session %s", session_id)
+
     async def send_for_event(self, session_id: str, event: Event) -> None:
+        if event.type == "state":
+            state = getattr(event, "state", None)
+            if isinstance(state, str):
+                self._handle_bridge_state(session_id, state)
+            return
+
         intensity_key: str | None = None
         if event.type == "approval_request":
             intensity_key = "approval"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta
 import json
 from pathlib import Path
 
@@ -121,6 +122,87 @@ async def test_push_sends_notification_on_approval_request(
     assert calls[0]["vapid_claims"] == {"sub": "mailto:tests@example.com"}
 
     assert bridge.resolve_approval("tc-push-1", approved=True)
+    await task
+
+
+@pytest.mark.asyncio
+async def test_push_sends_idle_escalation_after_waiting_for_approval(
+    push_client: AsyncClient,
+    psk: str,
+    push_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _ = push_home
+
+    import vibecheck.push as push_module
+
+    manager = push_module._current_push_manager
+    assert manager is not None
+
+    now = [datetime(2026, 2, 28, 12, 0, 0)]
+    manager.intensity._now_fn = lambda: now[0]  # type: ignore[attr-defined]
+    manager.intensity.level = 4
+
+    calls: list[dict[str, object]] = []
+
+    async def fake_webpush(*, subscription_info, data=None, **_kwargs):
+        calls.append({"subscription_info": subscription_info, "data": data})
+
+    monkeypatch.setattr(push_module, "webpush_async", fake_webpush)
+
+    async def fake_copy(_tool_name: str, _args: dict[str, object]) -> str:
+        return "Approve (test)"
+
+    monkeypatch.setattr(push_module, "generate_notification_copy", fake_copy)
+
+    subscription = {
+        "endpoint": "https://example.com/push/idle",
+        "keys": {"p256dh": "p256dh-key", "auth": "auth-key"},
+    }
+    subscribe = await push_client.post(
+        "/api/push/subscribe",
+        headers={"X-PSK": psk},
+        json=subscription,
+    )
+    assert subscribe.status_code == 200
+
+    bridge = session_manager.attach("push-session-idle")
+
+    task = asyncio.create_task(
+        bridge.request_approval(
+            call_id="tc-push-idle-1",
+            tool_name="bash",
+            args={"command": "echo hi"},
+        )
+    )
+    await asyncio.sleep(0)
+
+    for _ in range(100):
+        if calls:
+            break
+        await asyncio.sleep(0)
+
+    assert calls, "expected initial approval push to be sent"
+    calls.clear()
+
+    for _ in range(100):
+        if manager._idle_session_id == "push-session-idle":  # type: ignore[attr-defined]
+            break
+        await asyncio.sleep(0)
+
+    assert manager._idle_session_id == "push-session-idle"  # type: ignore[attr-defined]
+
+    now[0] += timedelta(minutes=5)
+    await manager._send_idle_escalation_if_needed()
+
+    assert calls, "expected idle escalation push to be sent"
+    payload = calls[0]["data"]
+    decoded = json.loads(payload)
+    assert decoded["title"].startswith("💤")
+    assert "idle for 5min" in decoded["body"]
+    assert decoded["url"].endswith("sid=push-session-idle")
+
+    assert bridge.resolve_approval("tc-push-idle-1", approved=True)
     await task
 
 
