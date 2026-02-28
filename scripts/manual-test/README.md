@@ -16,7 +16,7 @@ For the full operator runbook (prereqs, exact commands, troubleshooting), see:
 ## Recommended Terminal Layout
 
 - **Terminal A**: TUI runtime + transcript capture  
-  `scripts/manual-test/capture.sh --base-url https://<your-domain> --ws-port 7870`
+  `scripts/manual-test/capture.sh --base-url https://<your-domain>`
 - **Terminal B**: Interactive checklist runner  
   `scripts/manual-test/run.sh --base-url https://<your-domain>`
 - **Phone**: Open the same `https://<your-domain>` PWA and connect to the live session.

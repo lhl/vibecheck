@@ -37,7 +37,7 @@ If your Vibe config has `active_model = "local"` and no local llama.cpp server i
 force a cloud model for manual testing:
 
 ```bash
-VIBE_ACTIVE_MODEL=devstral-2 scripts/manual-test/capture.sh --base-url https://<your-domain> --ws-port 7870
+VIBE_ACTIVE_MODEL=devstral-2 scripts/manual-test/capture.sh --base-url https://<your-domain>
 ```
 
 ## Terminal Layout
@@ -50,7 +50,7 @@ VIBE_ACTIVE_MODEL=devstral-2 scripts/manual-test/capture.sh --base-url https://<
 
 ```bash
 cd /home/ubuntu/vibecheck
-VIBE_ACTIVE_MODEL=devstral-2 scripts/manual-test/capture.sh --base-url https://<your-domain> --ws-port 7870
+VIBE_ACTIVE_MODEL=devstral-2 scripts/manual-test/capture.sh --base-url https://<your-domain>
 ```
 
 ### Terminal B

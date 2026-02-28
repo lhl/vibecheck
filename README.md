@@ -27,8 +27,8 @@ export VIBECHECK_PSK=YOUR_PSK
 # Optional: required for voice + translation (push copy uses Ministral when set)
 export MISTRAL_API_KEY=YOUR_KEY
 
-# Recommended: Vibe TUI + vibecheck bridge (starts server on :7870)
-uv run vibecheck-vibe --ws-port 7870
+# Recommended: Vibe TUI + vibecheck bridge (defaults to :7870)
+uv run vibecheck-vibe
 
 # Alternative: server-only bridge (serves built PWA from `vibecheck/static/`)
 (cd vibecheck/frontend && npm run build)
@@ -42,11 +42,12 @@ uv run python -m vibecheck
 ### Terminal + phone (live attach)
 
 ```bash
-uv run vibecheck-vibe --ws-port 7870
+uv run vibecheck-vibe
 ```
 
 - Open the PWA at `https://your-domain/` (or `http://localhost:7870/` if local) and enter the PSK.
 - Pick the live session from the dropdown and hit **Connect**.
+- If `MISTRAL_API_KEY` is set and you haven't exported `VIBE_ACTIVE_MODEL`, `vibecheck-vibe` will prefer Vibe's `devstral-2` (Mistral API) over the `llamacpp` local model.
 
 > Note: push notifications + microphone require a secure context (HTTPS or `localhost`).
 

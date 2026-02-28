@@ -165,7 +165,7 @@ After launching scrcpy, use Niri's tiling to place:
 ### EC2 Prep
 
 - [ ] Vibe running and responsive
-- [ ] `uv run vibecheck-vibe --ws-port 7870` running (Vibe TUI + vibecheck bridge on :7870)
+- [ ] `uv run vibecheck-vibe` running (Vibe TUI + vibecheck bridge on :7870)
 - [ ] Caddy serving HTTPS (verify `https://your-domain` loads)
 - [ ] WebSocket connectivity verified (phone connects, events flow)
 - [ ] Test project loaded (something Vibe can code against)

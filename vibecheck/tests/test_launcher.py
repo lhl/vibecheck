@@ -11,6 +11,23 @@ from vibecheck import launcher
 
 
 class FakeVibeConfig:
+    def __init__(self) -> None:
+        self.enabled_tools: list[str] = []
+        self.active_model = "local"
+        self.models = [
+            SimpleNamespace(alias="devstral-2", provider="mistral"),
+            SimpleNamespace(alias="local", provider="llamacpp"),
+        ]
+
+    def get_active_model(self):
+        for model in self.models:
+            if model.alias == self.active_model:
+                return model
+        raise ValueError("active model missing")
+
+    def get_provider_for_model(self, model):
+        return SimpleNamespace(name=getattr(model, "provider", ""))
+
     @classmethod
     def load(cls):
         return cls()
@@ -18,13 +35,16 @@ class FakeVibeConfig:
 
 class FakeAgentLoop:
     last_kwargs: dict | None = None
+    last_config: object | None = None
 
-    def __init__(self, *_args, **kwargs) -> None:
+    def __init__(self, config, **kwargs) -> None:
+        self.config = config
         self.session_id = "live-session"
         self.message_observer = kwargs.get("message_observer")
         self.approval_callback = None
         self.user_input_callback = None
         FakeAgentLoop.last_kwargs = kwargs
+        FakeAgentLoop.last_config = config
 
     def set_approval_callback(self, callback) -> None:
         self.approval_callback = callback
@@ -77,6 +97,48 @@ def test_build_agent_loop_passes_message_observer(fake_runtime: VibeRuntime) -> 
     assert loop.message_observer is observer
     assert FakeAgentLoop.last_kwargs is not None
     assert FakeAgentLoop.last_kwargs["message_observer"] is observer
+
+
+def test_build_agent_loop_prefers_mistral_devstral2_when_key_present(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_runtime: VibeRuntime,
+) -> None:
+    fake_args = SimpleNamespace(agent="default", enabled_tools=None)
+
+    monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+    monkeypatch.delenv("VIBE_ACTIVE_MODEL", raising=False)
+
+    loop = launcher._build_agent_loop(fake_args, fake_runtime)
+
+    assert loop.config.active_model == "devstral-2"
+
+
+def test_build_agent_loop_does_not_override_active_model_when_env_is_explicit(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_runtime: VibeRuntime,
+) -> None:
+    fake_args = SimpleNamespace(agent="default", enabled_tools=None)
+
+    monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
+    monkeypatch.setenv("VIBE_ACTIVE_MODEL", "local")
+
+    loop = launcher._build_agent_loop(fake_args, fake_runtime)
+
+    assert loop.config.active_model == "local"
+
+
+def test_build_agent_loop_does_not_switch_models_without_mistral_key(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_runtime: VibeRuntime,
+) -> None:
+    fake_args = SimpleNamespace(agent="default", enabled_tools=None)
+
+    monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
+    monkeypatch.delenv("VIBE_ACTIVE_MODEL", raising=False)
+
+    loop = launcher._build_agent_loop(fake_args, fake_runtime)
+
+    assert loop.config.active_model == "local"
 
 
 def test_launch_creates_live_bridge_and_runs_app(

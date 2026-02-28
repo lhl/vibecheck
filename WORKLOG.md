@@ -19,6 +19,12 @@
 - Updated `docs/DEMO.md` to reference `vibecheck-vibe` (instead of `vibe`) and clarify the EC2 “server running” check.
 - Updated `docs/PLAN.md` to mark Layer 1 + 1.5 bridge items as complete (`[x]`).
 
+### Launcher defaults: port + model
+- `vibecheck-vibe` now defaults to port `7870` (no need to pass `--ws-port` unless overriding).
+- `vibecheck-vibe` now loads `~/.vibe/.env` (matching Vibe CLI) and prefers Vibe's `devstral-2` (Mistral API) when `MISTRAL_API_KEY` is present, unless `VIBE_ACTIVE_MODEL` is explicitly set.
+- Updated `README.md`, `docs/DEMO.md`, and `scripts/manual-test/` docs to omit `--ws-port 7870` and document the model preference.
+- Tests: `uv run pytest vibecheck/tests/ -v` → **119 passed**
+
 ### Repository setup
 - Created `vibecheck` repo
 - Created README.md (full product brief)

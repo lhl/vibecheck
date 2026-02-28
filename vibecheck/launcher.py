@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import inspect
+import os
 from pathlib import Path
 import sys
 from typing import Any, Callable
@@ -73,6 +74,91 @@ def _unlock_vibe_config_paths() -> None:
 
     try:
         unlock_config_paths()
+    except Exception:
+        return
+
+
+def _load_vibe_dotenv_values() -> None:
+    """Mirror Vibe's CLI behavior by loading `~/.vibe/.env` into `os.environ`."""
+    try:
+        from vibe.core.config import load_dotenv_values
+    except Exception:
+        return
+
+    try:
+        load_dotenv_values()
+    except Exception:
+        return
+
+
+def _has_model_alias(config: object, alias: str) -> bool:
+    models = getattr(config, "models", None)
+    if not isinstance(models, list):
+        return False
+    return any(getattr(model, "alias", None) == alias for model in models)
+
+
+def _active_model_provider(config: object) -> str | None:
+    get_active_model = getattr(config, "get_active_model", None)
+    get_provider_for_model = getattr(config, "get_provider_for_model", None)
+    if callable(get_active_model) and callable(get_provider_for_model):
+        try:
+            model = get_active_model()
+            provider = get_provider_for_model(model)
+        except Exception:
+            provider = None
+            model = None
+        else:
+            provider_name = getattr(provider, "name", None)
+            if isinstance(provider_name, str) and provider_name:
+                return provider_name
+            model_provider = getattr(model, "provider", None)
+            if isinstance(model_provider, str) and model_provider:
+                return model_provider
+
+    active_alias = getattr(config, "active_model", None)
+    models = getattr(config, "models", None)
+    if not isinstance(active_alias, str) or not isinstance(models, list):
+        return None
+
+    for model in models:
+        if getattr(model, "alias", None) == active_alias:
+            provider_name = getattr(model, "provider", None)
+            if isinstance(provider_name, str) and provider_name:
+                return provider_name
+    return None
+
+
+def _maybe_prefer_mistral_devstral2(config: object) -> None:
+    """Prefer Mistral's Devstral 2 model when an API key is present.
+
+    This avoids surprising llamacpp failures (and avoids needing a local llama-server)
+    when the user already has `MISTRAL_API_KEY` available.
+
+    Users can force a specific model by exporting `VIBE_ACTIVE_MODEL`.
+    """
+
+    if os.getenv("VIBE_ACTIVE_MODEL"):
+        return
+    if not os.getenv("MISTRAL_API_KEY"):
+        return
+
+    active_alias = getattr(config, "active_model", None)
+    if not isinstance(active_alias, str) or not active_alias:
+        return
+
+    if active_alias == "devstral-2":
+        return
+
+    provider = _active_model_provider(config)
+    if provider != "llamacpp":
+        return
+
+    if not _has_model_alias(config, "devstral-2"):
+        return
+
+    try:
+        setattr(config, "active_model", "devstral-2")
     except Exception:
         return
 
@@ -250,7 +336,9 @@ def _build_agent_loop(
     message_observer: Callable[[object], None] | None = None,
 ):
     _unlock_vibe_config_paths()
+    _load_vibe_dotenv_values()
     config = runtime.vibe_config_cls.load()
+    _maybe_prefer_mistral_devstral2(config)
 
     enabled_tools = getattr(vibe_args, "enabled_tools", None)
     if enabled_tools and hasattr(config, "enabled_tools"):
