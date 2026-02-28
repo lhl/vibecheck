@@ -37,8 +37,8 @@ Full height = `100dvh` (dynamic viewport height for mobile browser chrome). Layo
 
 **Default (collapsed):**
 - vibecheck pixel-art logo (left)
-- Connection status indicator (dot: green=connected, red=disconnected)
-- Active session label: title or first 8 chars of UUID (e.g. `b8b6aa96…`)
+- Active session label: title or first 8 chars of UUID (e.g. `b8b6aa96…`) (center/left)
+- Connection status indicator (right): dot + label (green=connected, red=disconnected, yellow=reconnecting)
 - Tap anywhere on header to expand
 
 **Expanded (session picker):**
@@ -49,11 +49,6 @@ Full height = `100dvh` (dynamic viewport height for mobile browser chrome). Layo
 - "Browse older sessions" collapsible section for non-active sessions
 - Tap a session to switch; picker collapses
 - Tap header bar again to collapse without switching
-
-**Connection status** (in header, always visible):
-- Green dot + "Connected" (or just dot for space)
-- Red dot + "Disconnected" — maybe with reconnect countdown
-- Yellow dot + "Reconnecting…"
 
 ---
 
@@ -102,7 +97,7 @@ Full height = `100dvh` (dynamic viewport height for mobile browser chrome). Layo
 The bottom-most bar of the app. Compact single-line strip.
 
 **Default content:**
-- Left: session status text (e.g. "idle", "running", "waiting approval")
+- Left: agent state (e.g. "idle", "running", "waiting approval") — this is session/agent state, NOT connection state (connection lives in header top-right)
 - Right: token/cost counter (e.g. "$0.42 | 12K tokens") — always visible, updates in real time
 
 **Interactive elements:**
