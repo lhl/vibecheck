@@ -101,4 +101,38 @@ describe('ChatMessage', () => {
 
     expect(screen.queryByRole('button', { name: 'Translate' })).not.toBeInTheDocument()
   })
+
+  it('aborts auto-translate fetch when the component is destroyed', async () => {
+    let aborted = false
+
+    const fetchSpy = vi.fn((_resource, options = {}) => {
+      const signal = options?.signal
+      return new Promise((_resolve, reject) => {
+        if (signal) {
+          signal.addEventListener('abort', () => {
+            aborted = true
+            reject(new DOMException('Aborted', 'AbortError'))
+          })
+        }
+      })
+    })
+
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const { unmount } = render(ChatMessage, {
+      event: { id: 'a-auto-destroy-1', type: 'assistant', content: 'Yes', timestamp: 1700000000 },
+      psk: 'dev-psk',
+      autoTranslate: true,
+    })
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledTimes(1)
+    })
+
+    unmount()
+
+    await waitFor(() => {
+      expect(aborted).toBe(true)
+    })
+  })
 })

@@ -1,7 +1,17 @@
+const MAX_TRANSLATION_CACHE_ENTRIES = 200
 const cache = new Map()
 
 export function getCachedTranslation(eventId) {
-  return cache.get(eventId) || ''
+  if (!eventId) {
+    return ''
+  }
+  const value = cache.get(eventId)
+  if (!value) {
+    return ''
+  }
+  cache.delete(eventId)
+  cache.set(eventId, value)
+  return value
 }
 
 export function setCachedTranslation(eventId, translatedText) {
@@ -12,7 +22,17 @@ export function setCachedTranslation(eventId, translatedText) {
   if (!trimmed) {
     return
   }
+  if (cache.has(eventId)) {
+    cache.delete(eventId)
+  }
   cache.set(eventId, trimmed)
+  while (cache.size > MAX_TRANSLATION_CACHE_ENTRIES) {
+    const oldest = cache.keys().next().value
+    if (typeof oldest === 'undefined') {
+      break
+    }
+    cache.delete(oldest)
+  }
 }
 
 export function cjkRatio(text) {
@@ -42,4 +62,3 @@ export function cjkRatio(text) {
 export function shouldSkipTranslation(text, threshold = 0.3) {
   return cjkRatio(text) > threshold
 }
-

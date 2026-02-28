@@ -1,4 +1,5 @@
 <script>
+  import { onDestroy } from 'svelte'
   import { renderBasicMarkdown } from '../lib/markdown'
   import { getCachedTranslation, setCachedTranslation, shouldSkipTranslation } from '../lib/translate'
 
@@ -18,6 +19,8 @@
   let translatedText = ''
   let isTranslating = false
   let translateError = ''
+  let destroyed = false
+  let abortController = null
 
   async function ensureTranslated() {
     if (!event?.id || !originalText) {
@@ -26,7 +29,9 @@
 
     const cached = getCachedTranslation(event.id)
     if (cached) {
-      translatedText = cached
+      if (!destroyed) {
+        translatedText = cached
+      }
       return cached
     }
 
@@ -34,13 +39,23 @@
       throw new Error('Missing PSK.')
     }
 
+    if (abortController) {
+      try {
+        abortController.abort()
+      } catch {
+        // no-op
+      }
+    }
+    abortController = new AbortController()
+
     const response = await fetch('/api/translate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(psk ? { 'X-PSK': psk } : {}),
+        'X-PSK': psk,
       },
       body: JSON.stringify({ text: originalText, target_lang: 'ja' }),
+      signal: abortController.signal,
     })
 
     if (!response.ok) {
@@ -54,7 +69,9 @@
     }
 
     setCachedTranslation(event.id, text)
-    translatedText = text
+    if (!destroyed) {
+      translatedText = text
+    }
     return text
   }
 
@@ -73,11 +90,17 @@
     isTranslating = true
     try {
       await ensureTranslated()
-      showTranslated = true
+      if (!destroyed) {
+        showTranslated = true
+      }
     } catch (error) {
-      translateError = error instanceof Error ? error.message : 'Translation failed'
+      if (!destroyed) {
+        translateError = error instanceof Error ? error.message : 'Translation failed'
+      }
     } finally {
-      isTranslating = false
+      if (!destroyed) {
+        isTranslating = false
+      }
     }
   }
 
@@ -88,20 +111,39 @@
     !showTranslated &&
     !translatedText &&
     !isTranslating &&
-    !translateError
+    !translateError &&
+    !destroyed
   ) {
     isTranslating = true
     ensureTranslated()
       .then(() => {
-        showTranslated = true
+        if (!destroyed) {
+          showTranslated = true
+        }
       })
       .catch((error) => {
-        translateError = error instanceof Error ? error.message : 'Translation failed'
+        if (!destroyed) {
+          translateError = error instanceof Error ? error.message : 'Translation failed'
+        }
       })
       .finally(() => {
-        isTranslating = false
+        if (!destroyed) {
+          isTranslating = false
+        }
       })
   }
+
+  onDestroy(() => {
+    destroyed = true
+    if (abortController) {
+      try {
+        abortController.abort()
+      } catch {
+        // no-op
+      }
+      abortController = null
+    }
+  })
 </script>
 
 <article data-testid="chat-message" class="chat-message {roleClass}">
