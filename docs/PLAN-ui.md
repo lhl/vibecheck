@@ -5,6 +5,50 @@
 
 ---
 
+## Visual Aesthetic
+
+**Terminal-native feel.** Think byobu/tmux status line, not Material Design. Comfortable like you're in the terminal.
+
+**Colors:**
+- Background: dark grey (`#1a1a1a`–`#222`) — flat, no gradients on backgrounds
+- Cards/panels: slightly lighter grey (`#2a2a2a`–`#333`) with hairline light grey borders (`#555` or `rgba(255,255,255,0.1)`)
+- Text: off-white (`#e0e0e0`), muted text `#888`
+- Accent: Mistral 5-layer flame gradient (yellow → red), used for:
+  - vibecheck logo / branding
+  - Active/highlight states
+  - Progress indicators
+  - `#F7D046` → `#F2A93B` → `#EF7D31` → `#E8542E` → `#DF2A2A`
+
+**Typography:**
+- `JetBrains Mono` for everything (load via Google Fonts or bundle subset)
+- Monospace across the board — headers, body, buttons, status line
+- No serif or sans-serif fonts anywhere
+
+**Borders & chrome:**
+- Hairline borders only (`1px solid rgba(255,255,255,0.1)`)
+- No drop shadows, no rounded corners (or very subtle 2px max)
+- No gradients on backgrounds — flat color blocks
+
+**Status line segments** (byobu-style):
+- Divided into sections with distinct background colors, like a terminal status bar
+- Left section (agent state): dark bg
+- Center section (YOLO mode when active): **inverse bright yellow** (`#F7D046`) background with dark text — unmissable
+- Right section (cost ticker): dark bg
+- Sections separated by subtle color breaks, not borders
+
+**YOLO mode visual:**
+- Status bar center section flips to bright Mistral yellow (`#F7D046`) bg + dark text (`#1a1a1a`)
+- Inverse/high-contrast — impossible to miss, feels like a terminal warning banner
+- Rest of UI unchanged (no global color shift)
+
+**Overall vibe:**
+- Feels like SSH'd into a server, checking on your agent
+- Information-dense but not cluttered
+- Monospace everything, hairline borders, flat dark surfaces
+- Mistral flame colors are the only "warm" element — everything else is cool grey
+
+---
+
 ## Layout Structure
 
 Fixed viewport PWA layout with three zones. No page-level scroll — each zone manages its own overflow.
@@ -183,13 +227,14 @@ listening → transcribing → agent running → speaking (TTS) → listening �
 
 ---
 
-## Dark / Light Theme
+## Theme
 
-- CSS custom properties for all colors
-- Default: follow `prefers-color-scheme`
-- Manual toggle in header or status line
-- Key tokens: `--bg`, `--bg-card`, `--text`, `--text-muted`, `--accent`, `--border`, `--danger`, `--success`
-- Mistral brand colors preserved for accent/highlights regardless of theme
+Primary theme is the terminal dark aesthetic described in "Visual Aesthetic" above. Ship dark-only for hackathon.
+
+- CSS custom properties for all colors: `--bg`, `--bg-card`, `--text`, `--text-muted`, `--accent`, `--border`, `--danger`, `--success`
+- Font: `--font-mono: 'JetBrains Mono', monospace`
+- Mistral flame colors for accents regardless of any future light theme
+- Future/deferred: light theme option via `prefers-color-scheme` + manual toggle
 
 ---
 

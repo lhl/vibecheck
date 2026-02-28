@@ -4,6 +4,7 @@
 
 ### Phase 7 planning + UI design spec
 
+- Defined visual aesthetic: terminal-native dark theme (dark grey bg, hairline borders, JetBrains Mono everywhere, Mistral flame gradient accents, byobu-style segmented status bar, YOLO mode inverse yellow banner)
 - Created `docs/PLAN-ui.md` — full PWA layout spec for Phase 7 polish:
   - Fixed viewport layout: header (sticky top), message log (flex scroll), input bar (sticky bottom), status line (footer)
   - Header: logo + session label + connection status (top-right), expands to session picker on tap
@@ -24,6 +25,23 @@
   - L8: camera/vision prototype cross-reference
   - L9: YOLO mode + cost ticker specs, deferred items synced with PLAN.md
 - Created pixel-art PWA icon: 10×10 grid SVG with 5 Mistral-colored stripes + white checkmark, rendered to 192×192 and 512×512 PNGs
+
+### Phase 7 polish — sessions (WU-24/WU-23)
+
+- Backend (WU-24):
+  - `GET /api/sessions` now exposes `title` from `meta.json` (trimmed to 50 chars).
+  - Added `POST /api/sessions/{session_id}/resume` to reattach a managed bridge to past sessions and return backlog.
+  - Added `GET /api/sessions/{session_id}/diffs` to return before/after + unified diffs for `write_file`/`search_replace` tool calls observed by the bridge.
+  - Added test coverage in `vibecheck/tests/test_sessions.py`.
+- Frontend (WU-23):
+  - Replaced raw UUID dropdown with structured active/older session lists (active = `controllable=true`, older sessions behind a `<details>` expando).
+  - Added session resume button (calls `/resume`) and auto-selects the newest active session on launch.
+  - Added theme preference persistence (`auto`/`dark`/`light`) + wired the UI to CSS variables; tightened component styling to use the shared tokens.
+  - Added haptic feedback on approval request (`navigator.vibrate(200)`).
+  - Updated frontend tests (`vibecheck/frontend/src/App.test.js`) to cover “New session” title fallback.
+- Verification:
+  - `uv run pytest vibecheck/tests/ -v` -> pass.
+  - `cd vibecheck/frontend && npm test && npm run build` -> pass.
 
 ### Phase 6 follow-up review remediation
 - Fixed **High**: push notification actions now call-bound — payload includes `call_id`, SW threads it through to App.svelte, which uses it directly instead of fetching `/state` for "whatever is currently pending". Stale notifications can no longer approve the wrong tool call.
