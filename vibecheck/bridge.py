@@ -691,6 +691,8 @@ class SessionBridge:
         kind = raw_event.__class__.__name__
 
         if kind.endswith("UserMessageEvent"):
+            if self._message_observer_hooked:
+                return None
             message_id = getattr(raw_event, "message_id", None)
             if isinstance(message_id, str):
                 if message_id in self._observed_message_ids:
@@ -702,6 +704,9 @@ class SessionBridge:
             return UserMessageEvent(content=str(content))
 
         if kind.endswith("AssistantEvent"):
+            stopped_by_middleware = bool(getattr(raw_event, "stopped_by_middleware", False))
+            if self._message_observer_hooked and not stopped_by_middleware:
+                return None
             message_id = getattr(raw_event, "message_id", None)
             if isinstance(message_id, str):
                 if message_id in self._observed_message_ids:

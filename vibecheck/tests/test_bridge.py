@@ -125,6 +125,14 @@ class FakeAgentLoop:
         self.user_input_callback = callback
 
     async def act(self, msg: str):
+        if self.message_observer:
+            self.message_observer(
+                FakeObservedMessage(
+                    role="user",
+                    content=msg,
+                    message_id="m-user-1",
+                )
+            )
         yield FakeUserMessageEvent(content=msg, message_id="m-user-1")
         if self.message_observer:
             self.message_observer(
@@ -148,12 +156,28 @@ class FakeAgentLoop:
             tool_call_id="tc-1",
             result=FakeToolResult(answer=answer, command=args.command),
         )
+        if self.message_observer:
+            self.message_observer(
+                FakeObservedMessage(
+                    role="assistant",
+                    content=f"done {answer}",
+                    message_id="m-assistant-1",
+                )
+            )
         yield FakeAssistantEvent(content=f"done {answer}", message_id="m-assistant-1")
 
 
 class FakeAgentLoopNoUserEcho(FakeAgentLoop):
     async def act(self, msg: str):
         _ = msg
+        if self.message_observer:
+            self.message_observer(
+                FakeObservedMessage(
+                    role="user",
+                    content=msg,
+                    message_id="m-user-1",
+                )
+            )
         if self.message_observer:
             self.message_observer(
                 FakeObservedMessage(
@@ -176,6 +200,14 @@ class FakeAgentLoopNoUserEcho(FakeAgentLoop):
             tool_call_id="tc-1",
             result=FakeToolResult(answer=answer, command=args.command),
         )
+        if self.message_observer:
+            self.message_observer(
+                FakeObservedMessage(
+                    role="assistant",
+                    content=f"done {answer}",
+                    message_id="m-assistant-1",
+                )
+            )
         yield FakeAssistantEvent(content=f"done {answer}", message_id="m-assistant-1")
 
 
@@ -309,6 +341,64 @@ async def test_start_session_wires_agent_loop_callbacks_and_processes_events(
         event["type"] == "assistant" and "done yes" in event["content"]
         for _, event in manager.events
     )
+
+    bridge.stop()
+
+
+@pytest.mark.asyncio
+async def test_streaming_assistant_chunks_do_not_create_duplicate_chat_bubbles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.bridge as bridge_module
+
+    class FakeStreamingAgentLoop:
+        def __init__(self, _config, message_observer=None, enable_streaming: bool = False) -> None:
+            _ = enable_streaming
+            self.message_observer = message_observer
+            self.approval_callback = None
+            self.user_input_callback = None
+
+        def set_approval_callback(self, callback) -> None:
+            self.approval_callback = callback
+
+        def set_user_input_callback(self, callback) -> None:
+            self.user_input_callback = callback
+
+        async def act(self, msg: str):
+            if self.message_observer:
+                self.message_observer(FakeObservedMessage(role="user", content=msg, message_id="u-1"))
+            yield FakeUserMessageEvent(content=msg, message_id="u-1")
+
+            # Streaming chunks (should not surface as separate bubbles in the PWA).
+            yield FakeAssistantEvent(content="Under", message_id=None)
+            yield FakeAssistantEvent(content="stood.", message_id="a-1")
+
+            # Final aggregated message appended to history.
+            if self.message_observer:
+                self.message_observer(
+                    FakeObservedMessage(role="assistant", content="Understood.", message_id="a-1")
+                )
+
+    runtime = bridge_module.VibeRuntime(
+        agent_loop_cls=FakeStreamingAgentLoop,
+        vibe_config_cls=FakeVibeConfig,
+        approval_yes=FakeApprovalResponse.YES,
+        approval_no=FakeApprovalResponse.NO,
+        ask_result_cls=FakeAskUserQuestionResult,
+        answer_cls=FakeAnswer,
+    )
+    monkeypatch.setattr(bridge_module, "load_vibe_runtime", lambda: runtime)
+
+    manager = RecordingConnectionManager()
+    bridge = SessionBridge("streaming", connection_manager=manager)
+
+    await bridge.start_session("hello")
+
+    assistant_contents = [
+        event["content"] for _, event in manager.events if event["type"] == "assistant"
+    ]
+    assert "Understood." in assistant_contents
+    assert "Under" not in assistant_contents
 
     bridge.stop()
 

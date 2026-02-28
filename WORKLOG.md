@@ -25,6 +25,11 @@
 - Updated `README.md`, `docs/DEMO.md`, and `scripts/manual-test/` docs to omit `--ws-port 7870` and document the model preference.
 - Tests: `uv run pytest vibecheck/tests/ -v` → **119 passed**
 
+### PWA chat: suppress streamed assistant chunk bubbles
+- Fixed: PWA was showing a stray first-token assistant bubble ("Under" → "Understood...") because we were broadcasting streamed `AssistantEvent` chunks in addition to the final aggregated message.
+- Bridge now suppresses raw `AssistantEvent`/`UserMessageEvent` yields when message observer is available, keeping middleware STOP messages intact (`vibecheck/bridge.py`).
+- Tests: `uv run pytest vibecheck/tests/ -v` → **120 passed**
+
 ### Repository setup
 - Created `vibecheck` repo
 - Created README.md (full product brief)

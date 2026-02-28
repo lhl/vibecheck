@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 
 from httpx import ASGITransport, AsyncClient
 from pydantic import BaseModel
@@ -59,9 +60,9 @@ class FakeAssistantEvent:
 
 
 class FakeLiveAgentLoop:
-    def __init__(self, *_args, **_kwargs) -> None:
+    def __init__(self, *_args, **kwargs) -> None:
         self.session_id = "live-session"
-        self.message_observer = None
+        self.message_observer = kwargs.get("message_observer")
         self.approval_callback = None
         self.user_input_callback = None
 
@@ -72,6 +73,8 @@ class FakeLiveAgentLoop:
         self.user_input_callback = callback
 
     async def act(self, msg: str):
+        if self.message_observer:
+            self.message_observer(SimpleNamespace(role="user", content=msg, message_id="u-1"))
         yield FakeUserMessageEvent(content=msg, message_id="u-1")
         args = FakeToolArgs(command="echo hello")
         yield FakeToolCallEvent(tool_name="bash", args=args, tool_call_id="tc-live")
@@ -80,6 +83,8 @@ class FakeLiveAgentLoop:
             yield FakeToolResultEvent(tool_call_id="tc-live", result=FakeToolResult("approved"))
         else:
             yield FakeToolResultEvent(tool_call_id="tc-live", error="denied")
+        if self.message_observer:
+            self.message_observer(SimpleNamespace(role="assistant", content="done", message_id="a-1"))
         yield FakeAssistantEvent(content="done", message_id="a-1")
 
 
