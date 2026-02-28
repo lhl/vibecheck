@@ -85,11 +85,13 @@ Full height = `100dvh` (dynamic viewport height for mobile browser chrome). Layo
 - Pinned to bottom of message log area
 - Mic icon (left side, hold-to-record — no timer display, just icon state change while recording)
 - Textarea (center, auto-grow to ~3 lines max, then scroll internally)
-- Send button (right side)
+- Send / Cancel button (right side, context-dependent)
 - Auto-translate toggle (inline, existing)
 
 **Behavior:**
 - Enter to send (shift+enter for newline)
+- **Voice auto-submit:** after mic release → transcribe → auto-send the transcribed text (no manual send step)
+- **Send/Cancel toggle:** button shows "Send" when idle. When agent is running (`state=running`), button becomes "Cancel" (red) — cancels the active agent turn via `asyncio.CancelledError` on the run task. Needs `POST /api/sessions/{id}/cancel` endpoint (cancels `_run_agent_turn` task on the bridge).
 - Disabled state when not connected or no session selected
 - Clear after send
 
