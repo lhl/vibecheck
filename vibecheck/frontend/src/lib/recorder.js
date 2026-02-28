@@ -1,4 +1,5 @@
 let active = null
+let orphanedStopped = null
 
 function getPreferredMimeType() {
   const preferred = 'audio/webm;codecs=opus'
@@ -36,6 +37,8 @@ export async function startRecording() {
     return active
   }
 
+  orphanedStopped = null
+
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error('Microphone access is not available.')
   }
@@ -71,6 +74,10 @@ export async function startRecording() {
 
   recorder.onerror = () => {
     stopTracks(stream)
+    if (active && active.recorder === recorder) {
+      orphanedStopped = stopped
+      active = null
+    }
     if (typeof rejectStop === 'function') {
       rejectStop(new Error('Recording failed.'))
     }
@@ -82,6 +89,10 @@ export async function startRecording() {
     if (typeof resolveStop === 'function') {
       resolveStop(blob)
     }
+    if (active && active.recorder === recorder) {
+      orphanedStopped = stopped
+      active = null
+    }
   }
 
   recorder.start(200)
@@ -91,11 +102,17 @@ export async function startRecording() {
 
 export async function stopRecording() {
   if (!active) {
+    if (orphanedStopped) {
+      const stopped = orphanedStopped
+      orphanedStopped = null
+      return stopped
+    }
     throw new Error('No recording is active.')
   }
 
   const { recorder, stopped } = active
   active = null
+  orphanedStopped = null
 
   if (recorder.state !== 'inactive') {
     recorder.stop()
@@ -103,4 +120,3 @@ export async function stopRecording() {
 
   return stopped
 }
-
