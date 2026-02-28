@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" shape-rendering="crispEdges">
+  <!-- Five Mistral-colored stripes (2 rows each) -->
+  <rect x="0" y="0" width="10" height="2" fill="#F7D046"/>
+  <rect x="0" y="2" width="10" height="2" fill="#F2A93B"/>
+  <rect x="0" y="4" width="10" height="2" fill="#EF7D31"/>
+  <rect x="0" y="6" width="10" height="2" fill="#E8542E"/>
+  <rect x="0" y="8" width="10" height="2" fill="#DF2A2A"/>
+
+  <!--
+    Pixel checkmark (8px tall, rows 1-8, shifted right 1col)
+
+    . . . . . . . . . .
+    . . . . . . . . . X   row 1  tip
+    . . . . . . . . X X   row 2
+    . . . . . . . X X .   row 3
+    . . . . . . X X . .   row 4
+    . X . . . X X . . .   row 5  short arm ext + long arm
+    . X X . X X . . . .   row 6  short arm + junction
+    . . X X X . . . . .   row 7  merge
+    . . . X . . . . . .   row 8  vertex
+    . . . . . . . . . .
+  -->
+
+  <!-- Long arm (top-right, descending left) -->
+  <rect x="9" y="1" width="1" height="1" fill="#FFF"/>
+  <rect x="8" y="2" width="2" height="1" fill="#FFF"/>
+  <rect x="7" y="3" width="2" height="1" fill="#FFF"/>
+  <rect x="6" y="4" width="2" height="1" fill="#FFF"/>
+  <rect x="5" y="5" width="2" height="1" fill="#FFF"/>
+
+  <!-- Short arm extension -->
+  <rect x="1" y="5" width="1" height="1" fill="#FFF"/>
+
+  <!-- Short arm + junction -->
+  <rect x="1" y="6" width="2" height="1" fill="#FFF"/>
+  <rect x="4" y="6" width="2" height="1" fill="#FFF"/>
+  <rect x="2" y="7" width="3" height="1" fill="#FFF"/>
+
+  <!-- Vertex -->
+  <rect x="3" y="8" width="1" height="1" fill="#FFF"/>
+</svg>
