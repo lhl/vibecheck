@@ -1,17 +1,29 @@
 <script>
+  import MicButton from './MicButton.svelte'
+
   export let sessionId = ''
   export let psk = ''
   export let pendingInput = null
   export let connectionStatus = 'disconnected'
   export let onSubmitted = null
+  export let voiceLanguage = 'ja'
 
-  let value = ''
+  export let value = ''
   let isSubmitting = false
   let errorMessage = ''
 
   $: isConnected = connectionStatus === 'connected'
   $: isDisabled = !isConnected || !sessionId || isSubmitting
   $: placeholder = pendingInput ? 'Answer the question...' : 'Send a message...'
+
+  function handleTranscribed(text) {
+    const trimmed = typeof text === 'string' ? text.trim() : ''
+    if (!trimmed) {
+      return
+    }
+
+    value = value ? `${value.trimEnd()} ${trimmed}` : trimmed
+  }
 
   async function submit() {
     const text = value.trim()
@@ -78,6 +90,12 @@
 </script>
 
 <div class="input-bar">
+  <MicButton
+    {psk}
+    language={voiceLanguage}
+    disabled={isDisabled}
+    onTranscribed={handleTranscribed}
+  />
   <textarea
     rows="1"
     aria-label="Message input"
@@ -95,7 +113,7 @@
 <style>
   .input-bar {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto 1fr auto;
     gap: 0.5rem;
     border: 1px solid #33415f;
     border-radius: 14px;

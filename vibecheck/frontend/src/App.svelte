@@ -13,6 +13,7 @@
     storePsk,
     storeSessionId,
   } from './lib/auth'
+  import { loadVoiceLanguage, storeVoiceLanguage } from './lib/settings'
   import { createWebSocket } from './lib/ws'
   import { connection } from './stores/connection'
   import {
@@ -37,6 +38,7 @@
   let socketClient = null
   let refreshTimer = null
   let activeSessionId = ''
+  let voiceLanguage = loadVoiceLanguage()
 
   let isNearBottom = true
   let showNewMessages = false
@@ -211,6 +213,11 @@
     }
   }
 
+  function handleVoiceLanguageSelect(event) {
+    voiceLanguage = event.currentTarget.value
+    storeVoiceLanguage(voiceLanguage)
+  }
+
   function onStreamScroll() {
     if (!streamElement) {
       return
@@ -311,6 +318,12 @@
         </select>
       {/if}
 
+      <label for="voice-lang">Voice language</label>
+      <select id="voice-lang" value={voiceLanguage} on:change={handleVoiceLanguageSelect}>
+        <option value="ja">JA</option>
+        <option value="en">EN</option>
+      </select>
+
       <div class="control-actions">
         <button type="button" on:click={connectSocket} disabled={!sessionId}>Connect</button>
         <button type="button" class="secondary" on:click={disconnectSocket}>Disconnect</button>
@@ -354,6 +367,7 @@
       <InputBar
         {sessionId}
         {psk}
+        {voiceLanguage}
         pendingInput={$pendingInput}
         connectionStatus={$connection.status}
         onSubmitted={handleSubmitted}

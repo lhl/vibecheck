@@ -1,0 +1,34 @@
+const VOICE_LANGUAGE_KEY = 'vibecheck_voice_language'
+
+function safeLocalStorageGet(key) {
+  try {
+    return window.localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function safeLocalStorageSet(key, value) {
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+    // no-op
+  }
+}
+
+export function loadVoiceLanguage() {
+  const stored = safeLocalStorageGet(VOICE_LANGUAGE_KEY)
+  if (stored === 'en' || stored === 'ja') {
+    return stored
+  }
+  return 'ja'
+}
+
+export function storeVoiceLanguage(value) {
+  const trimmed = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (trimmed !== 'en' && trimmed !== 'ja') {
+    return
+  }
+  safeLocalStorageSet(VOICE_LANGUAGE_KEY, trimmed)
+}
+

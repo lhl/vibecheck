@@ -1,0 +1,104 @@
+from __future__ import annotations
+
+import os
+from typing import Any
+
+from fastapi import APIRouter, HTTPException, Query, Request
+from mistralai import Mistral
+from mistralai.models.file import File
+from mistralai.models.sdkerror import SDKError
+from pydantic import BaseModel, Field
+
+router = APIRouter()
+
+VOXTRAL_MODEL = "voxtral-mini-latest"
+
+
+class VoiceTranscriptionResponse(BaseModel):
+    text: str
+    language: str
+    duration_ms: int = Field(ge=0)
+
+
+def get_mistral_client() -> Mistral:
+    api_key = os.environ.get("MISTRAL_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="MISTRAL_API_KEY is not set")
+    return Mistral(api_key=api_key)
+
+
+def _segments_duration_ms(segments: Any) -> int:
+    if not isinstance(segments, list) or not segments:
+        return 0
+
+    ends: list[float] = []
+    for segment in segments:
+        end = getattr(segment, "end", None)
+        if isinstance(end, (float, int)):
+            ends.append(float(end))
+
+    if not ends:
+        return 0
+    return max(0, int(max(ends) * 1000))
+
+
+def _map_mistral_error(error: SDKError) -> HTTPException:
+    status_code = getattr(getattr(error, "raw_response", None), "status_code", 502)
+    if status_code in {401, 403}:
+        return HTTPException(status_code=502, detail="STT authentication with Mistral failed")
+    if status_code == 429:
+        return HTTPException(status_code=429, detail="STT rate limited")
+    if status_code >= 500:
+        return HTTPException(status_code=502, detail="STT upstream unavailable")
+    return HTTPException(status_code=400, detail="STT request failed")
+
+
+@router.post("/api/voice/transcribe")
+async def transcribe(
+    request: Request,
+    language: str = Query("ja"),
+) -> VoiceTranscriptionResponse:
+    content_type = request.headers.get("content-type") or ""
+    audio_bytes: bytes
+    filename = "recording.webm"
+    file_content_type: str | None = None
+
+    if content_type.startswith("multipart/form-data"):
+        form = await request.form()
+        upload = form.get("audio") or form.get("file")
+        if upload is None:
+            raise HTTPException(status_code=400, detail="Audio file is required")
+        if not hasattr(upload, "read"):
+            raise HTTPException(status_code=400, detail="Audio file is required")
+        audio_bytes = await upload.read()  # type: ignore[reportUnknownMemberType]
+        filename = getattr(upload, "filename", None) or filename
+        file_content_type = getattr(upload, "content_type", None)
+    else:
+        audio_bytes = await request.body()
+        file_content_type = content_type or None
+
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="Audio body is required")
+
+    client = get_mistral_client()
+    mistral_file = File(
+        file_name=filename,
+        content=audio_bytes,
+        content_type=file_content_type,
+    )
+    try:
+        result = await client.audio.transcriptions.complete_async(
+            model=VOXTRAL_MODEL,
+            file=mistral_file,
+            language=language,
+            timestamp_granularities=["segment"],
+        )
+    except SDKError as error:
+        raise _map_mistral_error(error) from error
+
+    duration_ms = _segments_duration_ms(getattr(result, "segments", None))
+    return VoiceTranscriptionResponse(
+        text=str(getattr(result, "text", "")).strip(),
+        language=language,
+        duration_ms=duration_ms,
+    )
