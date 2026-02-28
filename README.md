@@ -1255,7 +1255,6 @@ BaseEvent
 
 #### Live Attach Known Limitations (Phase 3.1)
 
-- Phone-injected prompts may not render as user bubbles in the terminal TUI. Upstream Vibe's `EventHandler` intentionally no-ops on `UserMessageEvent`; the phone UI still shows the full conversation.
 - `VibeCheckApp._handle_agent_loop_turn()` delegates to `bridge.inject_message()` for queue ownership. This intentionally drops Vibe's loading widget lifecycle, Ctrl+C turn interrupt behavior, and history refresh in the terminal path.
 
 ### Vibe's Waiting States (What Triggers Notifications)

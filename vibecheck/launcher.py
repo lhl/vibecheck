@@ -289,6 +289,7 @@ class VibeCheckApp(_BaseVibeApp):
                 self.event_handler,
                 loading_state_getter=lambda: getattr(self, "_loading_widget", None) is not None,
                 loading_widget_getter=lambda: getattr(self, "_loading_widget", None),
+                mount_user_message=self._mount_user_message,
             )
             self._bridge.add_raw_event_listener(self._tui_bridge.on_bridge_raw_event)
 
@@ -303,6 +304,23 @@ class VibeCheckApp(_BaseVibeApp):
         finally:
             self._server = None
 
+    async def _mount_user_message(self, content: str) -> None:
+        if not content.strip():
+            return
+
+        mount_and_scroll = getattr(self, "_mount_and_scroll", None)
+        if not callable(mount_and_scroll):
+            return
+
+        try:
+            from vibe.cli.textual_ui.widgets.messages import UserMessage
+        except Exception:
+            return
+
+        maybe_awaitable = mount_and_scroll(UserMessage(content))
+        if inspect.isawaitable(maybe_awaitable):
+            await maybe_awaitable
+
     async def _handle_agent_loop_turn(self, prompt: str) -> None:
         # Intentional parity tradeoff: the bridge queue serializes turns, but this
         # bypasses Vibe's native loading widget / interrupt / history refresh path.
@@ -314,6 +332,8 @@ class VibeCheckApp(_BaseVibeApp):
 
         injected = self._bridge.inject_message(rendered_prompt)
         if injected:
+            if self._tui_bridge is not None:
+                self._tui_bridge.mark_local_user_message(rendered_prompt)
             return
 
         # Keep a visible failure path in the terminal when bridge injection fails.

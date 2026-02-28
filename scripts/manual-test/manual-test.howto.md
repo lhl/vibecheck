@@ -9,7 +9,7 @@ Validate that Phase 3.1 acceptance criteria are satisfied against a real `vibech
 - Remote approval/question resolution returns terminal UI to input mode.
 - First-response-wins race behaves correctly.
 - Reconnect flow works during pending approval.
-- Known limitations are documented and observed consistently.
+- Phone-originated prompts render as user bubbles in the terminal.
 
 ## Prerequisites
 
@@ -71,7 +71,7 @@ auto-select the current live session.
 - `S3_REMOTE_QUESTION_ANSWER`
 - `S4_FIRST_RESPONSE_WINS`
 - `S5_RECONNECT_PENDING`
-- `S6_GAP2_VISIBILITY` (known limitation allowed)
+- `S6_GAP2_VISIBILITY` (strict pass)
 - `S7_GAP3_USABILITY`
 
 ## Output Artifacts

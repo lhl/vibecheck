@@ -445,7 +445,7 @@ scenario_gap2_visibility() {
   echo
   echo "Expected:"
   echo "- Phone always shows full thread."
-  echo "- Terminal user bubble may be missing (known limitation)."
+  echo "- Terminal shows the phone-originated user bubble."
 
   wait_for_enter "Send a phone-originated message now"
 
@@ -455,16 +455,16 @@ scenario_gap2_visibility() {
     notes+=("phone_thread_ok=no")
   fi
 
-  if ask_yes_no "Was the phone-originated user bubble visible in terminal?" n; then
+  if ask_yes_no "Was the phone-originated user bubble visible in terminal?" y; then
     notes+=("terminal_user_bubble=yes")
+  else
+    notes+=("terminal_user_bubble=no")
+  fi
+
+  if [[ "${notes[*]}" == *"phone_thread_ok=yes"* && "${notes[*]}" == *"terminal_user_bubble=yes"* ]]; then
     append_result "$key" "PASS" "${notes[*]}"
   else
-    notes+=("terminal_user_bubble=no_known_limitation")
-    if [[ "${notes[*]}" == *"phone_thread_ok=yes"* ]]; then
-      append_result "$key" "PASS" "${notes[*]}"
-    else
-      append_result "$key" "FAIL" "${notes[*]}"
-    fi
+    append_result "$key" "FAIL" "${notes[*]}"
   fi
 }
 

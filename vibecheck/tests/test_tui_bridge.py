@@ -106,3 +106,87 @@ async def test_tui_bridge_receives_waiting_approval_state_change() -> None:
 
     assert session_bridge.resolve_approval("tc-2", approved=False)
     await task
+
+
+@pytest.mark.asyncio
+async def test_tui_bridge_mounts_remote_user_message_after_dispatch() -> None:
+    class UserMessageEvent:
+        def __init__(self, content: str) -> None:
+            self.content = content
+            self.message_id = "m1"
+
+    calls: list[str] = []
+
+    class Handler:
+        async def handle_event(self, _event, **_kwargs) -> None:
+            calls.append("dispatch")
+
+    async def mount_user_message(content: str) -> None:
+        calls.append(f"mount:{content}")
+
+    bridge = TuiBridge(Handler(), mount_user_message=mount_user_message)
+
+    await bridge.on_bridge_raw_event(UserMessageEvent("hello"))
+
+    assert calls == ["dispatch", "mount:hello"]
+
+
+@pytest.mark.asyncio
+async def test_tui_bridge_skips_mount_for_locally_marked_user_message() -> None:
+    class UserMessageEvent:
+        def __init__(self, content: str) -> None:
+            self.content = content
+            self.message_id = "m1"
+
+    mounted: list[str] = []
+
+    async def mount_user_message(content: str) -> None:
+        mounted.append(content)
+
+    handler = RecordingEventHandler()
+    bridge = TuiBridge(handler, mount_user_message=mount_user_message)
+    bridge.mark_local_user_message("hello")
+
+    await bridge.on_bridge_raw_event(UserMessageEvent("hello"))
+
+    assert mounted == []
+
+
+@pytest.mark.asyncio
+async def test_tui_bridge_user_message_is_noop_when_mount_callback_missing() -> None:
+    class UserMessageEvent:
+        def __init__(self, content: str) -> None:
+            self.content = content
+            self.message_id = "m1"
+
+    handler = RecordingEventHandler()
+    bridge = TuiBridge(handler)
+
+    await bridge.on_bridge_raw_event(UserMessageEvent("hello"))
+
+    assert len(handler.events) == 1
+
+
+@pytest.mark.asyncio
+async def test_tui_bridge_local_prompt_marks_are_fifo_one_shot() -> None:
+    class UserMessageEvent:
+        def __init__(self, content: str) -> None:
+            self.content = content
+            self.message_id = "m1"
+
+    mounted: list[str] = []
+
+    async def mount_user_message(content: str) -> None:
+        mounted.append(content)
+
+    handler = RecordingEventHandler()
+    bridge = TuiBridge(handler, mount_user_message=mount_user_message)
+
+    bridge.mark_local_user_message("hello")
+    bridge.mark_local_user_message("hello")
+
+    await bridge.on_bridge_raw_event(UserMessageEvent("hello"))
+    await bridge.on_bridge_raw_event(UserMessageEvent("hello"))
+    await bridge.on_bridge_raw_event(UserMessageEvent("hello"))
+
+    assert mounted == ["hello"]

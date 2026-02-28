@@ -286,13 +286,20 @@ async def test_handle_agent_loop_turn_renders_prompt_before_bridge_injection(
     class Loop:
         pass
 
+    mark_calls: list[str] = []
+
     class Bridge:
         def __init__(self) -> None:
             self.injected: list[str] = []
 
         def inject_message(self, prompt: str) -> bool:
+            assert mark_calls == []
             self.injected.append(prompt)
             return True
+
+    class FakeTuiBridge:
+        def mark_local_user_message(self, content: str) -> None:
+            mark_calls.append(content)
 
     render_calls: list[tuple[str, Path]] = []
 
@@ -313,11 +320,59 @@ async def test_handle_agent_loop_turn_renders_prompt_before_bridge_injection(
         ws_port=9001,
         api_app=object(),
     )
+    app._tui_bridge = FakeTuiBridge()  # type: ignore[assignment]
 
     await app._handle_agent_loop_turn("check @README.md")
 
     assert bridge.injected == ["rendered:check @README.md"]
     assert render_calls == [("check @README.md", Path.cwd())]
+    assert mark_calls == ["rendered:check @README.md"]
+
+
+@pytest.mark.asyncio
+async def test_handle_agent_loop_turn_does_not_mark_prompt_when_bridge_injection_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Loop:
+        pass
+
+    class Bridge:
+        def inject_message(self, _prompt: str) -> bool:
+            return False
+
+    class UserMessageEvent:
+        def __init__(self, content: str) -> None:
+            self.content = content
+            self.message_id = "m1"
+
+    mounted: list[str] = []
+
+    async def mount_user_message(content: str) -> None:
+        mounted.append(content)
+
+    def fake_super_init(self, *_args, **kwargs) -> None:
+        self.agent_loop = kwargs.get("agent_loop")
+
+    monkeypatch.setattr(launcher._BaseVibeApp, "__init__", fake_super_init, raising=False)
+
+    bridge = Bridge()
+    app = launcher.VibeCheckApp(
+        agent_loop=Loop(),
+        bridge=bridge,
+        ws_port=9001,
+        api_app=object(),
+    )
+    setattr(app, "notify", lambda *_args, **_kwargs: None)
+
+    handler = SimpleNamespace(handle_event=lambda *_args, **_kwargs: None)
+    tui_bridge = launcher.TuiBridge(handler, mount_user_message=mount_user_message)
+    app._tui_bridge = tui_bridge
+
+    await app._handle_agent_loop_turn("hello")
+
+    await tui_bridge.on_bridge_raw_event(UserMessageEvent("hello"))
+
+    assert mounted == ["hello"]
 
 
 @pytest.mark.asyncio
