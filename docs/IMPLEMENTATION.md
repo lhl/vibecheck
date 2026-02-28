@@ -1478,10 +1478,16 @@ scripts/smoke_test.sh http://localhost:7870
 
 ### L9: Smart Autonomy & Showmanship
 
-- [ ] L9: Autonomy slider
+- [ ] **L9: YOLO mode** — auto-approve all tool calls from mobile
+  - Backend: add `auto_approve` flag on `SessionBridge`; when set, `_approval_callback` returns `(yes, None)` immediately instead of blocking on `request_approval()` Future. Toggle via `POST /api/sessions/{id}/auto-approve` (bool payload).
+  - Frontend: hidden "YOLO mode" toggle button (reveal for demo showmanship). When on, no approval cards appear — agent runs autonomously. Visual indicator (e.g. pulsing border, "YOLO" badge) so it's obvious during demo.
+  - Safety: still broadcasts `ApprovalRequestEvent` + auto-generated `ApprovalResolutionEvent` so the timeline shows what was auto-approved. Toggle off at any time to resume manual approval.
+- [ ] **L9: Live token/cost ticker** — real-time session cost display
+  - Backend: `GET /api/sessions/{id}/stats` — read from `agent_loop.stats` (live) or Vibe meta.json (historical). Fields: `session_cost`, `session_prompt_tokens`, `session_completion_tokens`, `steps`, `tool_calls_agreed`, `tool_calls_failed`.
+  - Frontend: small cost ticker in header or session info area (e.g. "$0.42 | 12K tokens"). Poll on interval or update on each event. Fun for demo — audience watches charges rack up in real time.
+  - Vibe already tracks `session_cost`, `input_price_per_million`, `output_price_per_million`, `session_total_llm_tokens` on `agent_loop.stats`.
 - [ ] L9: Live demo mode (public read-only URL)
 - [ ] L9: QR code for audience participation
-- [ ] L9: Cost/token tracker
 
 ---
 

@@ -299,10 +299,10 @@ Multi-session *discovery and switching* is built into L1/L2. This layer adds act
 
 > *Demo: "Audience opens QR code, watches the agent code live on their phones"*
 
-- [ ] Autonomy slider: "ask me about everything" ↔ "YOLO mode" (auto-approve safe tools)
+- [ ] **YOLO mode**: hidden toggle that auto-approves all tool calls — reveal during demo for showmanship. `_approval_callback` short-circuits, still logs auto-approved events to timeline. Toggle off to resume manual approval.
+- [ ] **Live token/cost ticker**: real-time `$X.XX | YK tokens` in header, reads from Vibe `agent_loop.stats`. Audience watches charges rack up live.
 - [ ] Per-tool trust levels: auto-approve `read_file`, always ask for `bash`, etc.
 - [ ] Time-boxed autonomy: "run free for 10 minutes, then check in"
-- [ ] Cost/token tracker: live dashboard of API spend per session
 - [ ] Risk scoring: color-code tool calls by danger level (green/yellow/red)
 - [ ] Live demo mode: public read-only URL for judges/audience
 - [ ] QR code on slide → instant audience participation
