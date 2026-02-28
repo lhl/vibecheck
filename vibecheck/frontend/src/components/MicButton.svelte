@@ -164,6 +164,11 @@
     finish()
   }
 
+  function handleTouchCancel(event) {
+    event.preventDefault()
+    finish()
+  }
+
   onDestroy(() => {
     stopTimer()
   })
@@ -181,6 +186,7 @@
     on:mouseleave={handleMouseLeave}
     on:touchstart={handleTouchStart}
     on:touchend={handleTouchEnd}
+    on:touchcancel={handleTouchCancel}
   >
     <span class="dot" aria-hidden="true"></span>
     <span class="timer" aria-hidden="true">{elapsedLabel}</span>

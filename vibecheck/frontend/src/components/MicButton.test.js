@@ -92,4 +92,22 @@ describe('MicButton', () => {
       expect(__isRecording()).toBe(false)
     })
   })
+
+  it('stops recording when touch is cancelled', async () => {
+    const deferred = createDeferred()
+    __setStartDeferred(deferred)
+
+    render(MicButton, { psk: 'dev-psk', language: 'en', disabled: false, onTranscribed: vi.fn() })
+
+    const button = screen.getByRole('button', { name: 'Hold to record' })
+    await fireEvent.touchStart(button)
+    await fireEvent.touchCancel(button)
+
+    deferred.resolve()
+
+    await waitFor(() => {
+      expect(__getStopCalls()).toBe(1)
+      expect(__isRecording()).toBe(false)
+    })
+  })
 })
