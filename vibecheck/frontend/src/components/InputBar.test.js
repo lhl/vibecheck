@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/svelte'
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import InputBar from './InputBar.svelte'
 
@@ -79,5 +79,35 @@ describe('InputBar', () => {
 
     expect(screen.getByRole('textbox')).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+  })
+
+  it('surfaces request errors without clearing the draft', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ detail: 'network unavailable' }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        ),
+      ),
+    )
+
+    render(InputBar, {
+      sessionId: 's-1',
+      psk: 'dev-psk',
+      pendingInput: null,
+      connectionStatus: 'connected',
+    })
+
+    const textbox = screen.getByRole('textbox')
+    await fireEvent.input(textbox, { target: { value: 'hello world' } })
+    await fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/503/i)).toBeInTheDocument()
+    })
+    expect(textbox).toHaveValue('hello world')
   })
 })

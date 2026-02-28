@@ -1,4 +1,5 @@
 const PSK_KEY = 'vibecheck_psk'
+const SESSION_KEY = 'vibecheck_sid'
 
 function safeLocalStorageGet(key) {
   try {
@@ -62,8 +63,30 @@ export function loadInitialPsk() {
   const fromHash = extractPskFromHash(window.location.hash)
   if (fromHash) {
     storePsk(fromHash)
+    try {
+      const cleanUrl = `${window.location.pathname}${window.location.search}`
+      window.history.replaceState(null, '', cleanUrl)
+    } catch {
+      // no-op
+    }
     return fromHash
   }
 
   return safeLocalStorageGet(PSK_KEY) || ''
+}
+
+export function loadStoredSessionId() {
+  return safeLocalStorageGet(SESSION_KEY) || ''
+}
+
+export function storeSessionId(sessionId) {
+  const trimmed = typeof sessionId === 'string' ? sessionId.trim() : ''
+  if (!trimmed) {
+    return
+  }
+  safeLocalStorageSet(SESSION_KEY, trimmed)
+}
+
+export function clearStoredSessionId() {
+  safeLocalStorageRemove(SESSION_KEY)
 }

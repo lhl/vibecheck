@@ -88,20 +88,41 @@ describe('createWebSocket', () => {
     expect(MockWebSocket.instances).toHaveLength(2)
 
     const second = MockWebSocket.instances[1]
-    second.open()
     second.close(1006)
+    expect(get(connection).reconnectAttempts).toBe(2)
 
     vi.advanceTimersByTime(2000)
     expect(MockWebSocket.instances).toHaveLength(3)
 
     for (let index = 0; index < 8; index += 1) {
       const current = MockWebSocket.instances.at(-1)
-      current.open()
       current.close(1006)
       vi.advanceTimersByTime(30000)
     }
 
     expect(get(connection).reconnectAttempts).toBeGreaterThanOrEqual(3)
+  })
+
+  it('resets reconnect attempts after a successful reconnect', () => {
+    const client = createWebSocket('/ws/events/s-1', 'dev-psk')
+    client.connect()
+
+    const first = MockWebSocket.instances[0]
+    first.open()
+    first.close(1006)
+
+    expect(get(connection).reconnectAttempts).toBe(1)
+
+    vi.advanceTimersByTime(1000)
+    const second = MockWebSocket.instances[1]
+    second.open()
+
+    expect(get(connection).status).toBe('connected')
+    expect(get(connection).reconnectAttempts).toBe(0)
+
+    second.close(1006)
+    expect(get(connection).status).toBe('connecting')
+    expect(get(connection).reconnectAttempts).toBe(1)
   })
 
   it('disconnect prevents future reconnect attempts', () => {
@@ -128,6 +149,35 @@ describe('createWebSocket', () => {
 
     vi.advanceTimersByTime(46000)
     expect(get(connection).status).toBe('connecting')
+  })
+
+  it('ignores heartbeat events so they do not consume event backlog', () => {
+    const client = createWebSocket('/ws/events/s-1', 'dev-psk')
+    client.connect()
+
+    const socket = MockWebSocket.instances[0]
+    socket.open()
+    socket.emitJson({ type: 'heartbeat', id: 'hb-1' })
+    socket.emitJson({ type: 'assistant', id: 'a-1', content: 'real event' })
+
+    const current = get(events)
+    expect(current).toHaveLength(1)
+    expect(current[0].id).toBe('a-1')
+  })
+
+  it('merges reconnect backlog payloads sent as arrays', () => {
+    const client = createWebSocket('/ws/events/s-1', 'dev-psk')
+    client.connect()
+
+    const socket = MockWebSocket.instances[0]
+    socket.open()
+    socket.emitJson([
+      { type: 'assistant', id: 'a-1', content: 'first' },
+      { type: 'heartbeat', id: 'hb-1' },
+      { type: 'assistant', id: 'a-2', content: 'second' },
+    ])
+
+    expect(get(events).map((event) => event.id)).toEqual(['a-1', 'a-2'])
   })
 
   it('includes psk in url query and sends serialized payloads', () => {

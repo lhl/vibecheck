@@ -5,16 +5,28 @@
   import ConnectionStatus from './components/ConnectionStatus.svelte'
   import InputBar from './components/InputBar.svelte'
   import ToolCallCard from './components/ToolCallCard.svelte'
-  import { clearStoredPsk, loadInitialPsk, storePsk } from './lib/auth'
+  import {
+    clearStoredPsk,
+    clearStoredSessionId,
+    loadInitialPsk,
+    loadStoredSessionId,
+    storePsk,
+    storeSessionId,
+  } from './lib/auth'
   import { createWebSocket } from './lib/ws'
   import { connection } from './stores/connection'
-  import { appendEvent, events, pendingApproval, pendingInput, toolResultsByCall } from './stores/events'
+  import {
+    appendEvent,
+    events,
+    pendingApproval,
+    pendingInput,
+    resetEvents,
+    toolResultsByCall,
+  } from './stores/events'
 
-  const SESSION_STORAGE_KEY = 'vibecheck_sid'
   const query = new URLSearchParams(window.location.search)
 
-  const initialSessionId =
-    query.get('sid') || query.get('session_id') || localStorage.getItem(SESSION_STORAGE_KEY) || ''
+  const initialSessionId = query.get('sid') || query.get('session_id') || loadStoredSessionId() || ''
 
   let psk = loadInitialPsk()
   let pskDraft = psk
@@ -24,6 +36,7 @@
   let streamElement = null
   let socketClient = null
   let refreshTimer = null
+  let activeSessionId = ''
 
   let isNearBottom = true
   let showNewMessages = false
@@ -101,11 +114,28 @@
       }
 
       if (sessionId) {
-        localStorage.setItem(SESSION_STORAGE_KEY, sessionId)
+        storeSessionId(sessionId)
       }
     } catch (error) {
       sessionError = error instanceof Error ? error.message : 'Failed to load sessions'
     }
+  }
+
+  function startRefreshTimer() {
+    if (refreshTimer) {
+      return
+    }
+    refreshTimer = setInterval(() => {
+      refreshSessions()
+    }, 10_000)
+  }
+
+  function stopRefreshTimer() {
+    if (!refreshTimer) {
+      return
+    }
+    clearInterval(refreshTimer)
+    refreshTimer = null
   }
 
   function connectSocket() {
@@ -113,7 +143,14 @@
       return
     }
 
+    const shouldResetTimeline = activeSessionId !== sessionId
     disconnectSocket()
+    if (shouldResetTimeline) {
+      resetEvents()
+      showNewMessages = false
+      renderedTimelineCount = 0
+    }
+    activeSessionId = sessionId
     socketClient = createWebSocket(websocketUrlForSession(sessionId), psk)
     socketClient.connect()
   }
@@ -136,6 +173,7 @@
     storePsk(trimmed)
     psk = trimmed
     refreshSessions().then(() => {
+      startRefreshTimer()
       if (sessionId) {
         connectSocket()
       }
@@ -148,22 +186,27 @@
     psk = ''
     pskDraft = ''
     sessionId = ''
+    activeSessionId = ''
     sessions = []
     sessionError = ''
-    localStorage.removeItem(SESSION_STORAGE_KEY)
+    stopRefreshTimer()
+    clearStoredSessionId()
+    resetEvents()
+    showNewMessages = false
+    renderedTimelineCount = 0
   }
 
   function handleSessionInput(event) {
     sessionId = event.currentTarget.value.trim()
     if (sessionId) {
-      localStorage.setItem(SESSION_STORAGE_KEY, sessionId)
+      storeSessionId(sessionId)
     }
   }
 
   function handleSessionSelect(event) {
     sessionId = event.currentTarget.value
     if (sessionId) {
-      localStorage.setItem(SESSION_STORAGE_KEY, sessionId)
+      storeSessionId(sessionId)
       connectSocket()
     }
   }
@@ -204,16 +247,6 @@
   }
 
   function handleSubmitted({ endpoint, payload }) {
-    if (endpoint === 'message') {
-      appendEvent({
-        type: 'user_message',
-        id: buildEventId('user-message-local'),
-        timestamp: Date.now() / 1000,
-        content: payload.content,
-      })
-      return
-    }
-
     if (endpoint === 'input') {
       appendEvent({
         type: 'input_resolution',
@@ -231,22 +264,15 @@
     }
 
     await refreshSessions()
+    startRefreshTimer()
 
     if (sessionId) {
       connectSocket()
     }
-
-    refreshTimer = setInterval(() => {
-      refreshSessions()
-    }, 10_000)
   })
 
   onDestroy(() => {
-    if (refreshTimer) {
-      clearInterval(refreshTimer)
-      refreshTimer = null
-    }
-
+    stopRefreshTimer()
     disconnectSocket()
   })
 </script>

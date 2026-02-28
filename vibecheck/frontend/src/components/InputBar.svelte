@@ -7,6 +7,7 @@
 
   let value = ''
   let isSubmitting = false
+  let errorMessage = ''
 
   $: isConnected = connectionStatus === 'connected'
   $: isDisabled = !isConnected || !sessionId || isSubmitting
@@ -19,6 +20,7 @@
     }
 
     isSubmitting = true
+    errorMessage = ''
 
     const endpoint = pendingInput ? 'input' : 'message'
     const payload = pendingInput
@@ -41,13 +43,26 @@
       })
 
       if (!response.ok) {
-        throw new Error(`${response.status} ${response.statusText}`)
+        let detail = ''
+        try {
+          const payload = await response.json()
+          detail = typeof payload?.detail === 'string' ? payload.detail : ''
+        } catch {
+          // no-op
+        }
+        throw new Error(
+          detail
+            ? `${response.status} ${detail}`
+            : `${response.status} ${response.statusText}`.trim(),
+        )
       }
 
       value = ''
       if (typeof onSubmitted === 'function') {
         onSubmitted({ endpoint, payload })
       }
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'Request failed'
     } finally {
       isSubmitting = false
     }
@@ -73,6 +88,9 @@
   ></textarea>
   <button type="button" on:click={submit} disabled={isDisabled}>Send</button>
 </div>
+{#if errorMessage}
+  <p class="error">{errorMessage}</p>
+{/if}
 
 <style>
   .input-bar {
@@ -114,5 +132,11 @@
 
   button:disabled {
     opacity: 0.6;
+  }
+
+  .error {
+    margin: 0.4rem 0 0;
+    color: #ffbcbc;
+    font-size: 0.76rem;
   }
 </style>

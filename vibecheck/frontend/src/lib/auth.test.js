@@ -1,5 +1,13 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { clearStoredPsk, extractPskFromHash, loadInitialPsk, storePsk } from './auth'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  clearStoredPsk,
+  clearStoredSessionId,
+  extractPskFromHash,
+  loadInitialPsk,
+  loadStoredSessionId,
+  storePsk,
+  storeSessionId,
+} from './auth'
 
 describe('auth helpers', () => {
   beforeEach(() => {
@@ -15,9 +23,12 @@ describe('auth helpers', () => {
   it('prefers hash psk over localStorage and persists it', () => {
     localStorage.setItem('vibecheck_psk', 'stored-value')
     window.location.hash = '#psk=hash-value'
+    const replaceSpy = vi.spyOn(window.history, 'replaceState')
 
     expect(loadInitialPsk()).toBe('hash-value')
     expect(localStorage.getItem('vibecheck_psk')).toBe('hash-value')
+    expect(replaceSpy).toHaveBeenCalled()
+    expect(window.location.hash).toBe('')
   })
 
   it('stores and clears psk', () => {
@@ -26,5 +37,13 @@ describe('auth helpers', () => {
 
     clearStoredPsk()
     expect(localStorage.getItem('vibecheck_psk')).toBeNull()
+  })
+
+  it('stores and clears session id', () => {
+    storeSessionId('session-1')
+    expect(loadStoredSessionId()).toBe('session-1')
+
+    clearStoredSessionId()
+    expect(loadStoredSessionId()).toBe('')
   })
 })

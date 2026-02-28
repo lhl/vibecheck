@@ -37,7 +37,33 @@ describe('App phase 4 shell', () => {
     setConnection('disconnected', 0)
     resetEvents()
     installWebSocketStub()
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((resource, options = {}) => {
+        if (resource === '/api/sessions') {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify([
+                { id: 's-1', status: 'running' },
+                { id: 's-2', status: 'running' },
+              ]),
+              { status: 200, headers: { 'Content-Type': 'application/json' } },
+            ),
+          )
+        }
+
+        if (options.method === 'POST') {
+          return Promise.resolve(
+            new Response(JSON.stringify({ status: 'ok' }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }),
+          )
+        }
+
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))
+      }),
+    )
   })
 
   afterEach(() => {
@@ -63,8 +89,10 @@ describe('App phase 4 shell', () => {
 
   it('shows new message button when user is scrolled up', async () => {
     localStorage.setItem('vibecheck_psk', 'dev-psk')
+    localStorage.setItem('vibecheck_sid', 's-1')
 
     render(App)
+    await screen.findByRole('combobox', { name: 'Known Sessions' })
 
     const stream = screen.getByTestId('chat-scroll')
     Object.defineProperty(stream, 'scrollHeight', { configurable: true, value: 1000 })
@@ -76,6 +104,37 @@ describe('App phase 4 shell', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'New messages ↓' })).toBeInTheDocument()
+    })
+  })
+
+  it('does not optimistically append a user bubble before websocket echo', async () => {
+    localStorage.setItem('vibecheck_psk', 'dev-psk')
+    localStorage.setItem('vibecheck_sid', 's-1')
+    setConnection('connected', 0)
+
+    render(App)
+
+    const textbox = screen.getByRole('textbox', { name: 'Message input' })
+    await fireEvent.input(textbox, { target: { value: 'hello over post' } })
+    await fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(screen.queryByText('hello over post')).not.toBeInTheDocument()
+  })
+
+  it('clears timeline when switching sessions', async () => {
+    localStorage.setItem('vibecheck_psk', 'dev-psk')
+    localStorage.setItem('vibecheck_sid', 's-1')
+
+    render(App)
+
+    appendEvent({ type: 'assistant', id: 'msg-switch-1', content: 'from session s-1' })
+    expect(await screen.findByText('from session s-1')).toBeInTheDocument()
+
+    const picker = await screen.findByRole('combobox', { name: 'Known Sessions' })
+    await fireEvent.change(picker, { target: { value: 's-2' } })
+
+    await waitFor(() => {
+      expect(screen.queryByText('from session s-1')).not.toBeInTheDocument()
     })
   })
 })

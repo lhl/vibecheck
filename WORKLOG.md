@@ -429,3 +429,37 @@
 - Verification:
   - `cd vibecheck/frontend && npm test` -> 9 files passed, 26 tests passed.
   - `cd vibecheck/frontend && npm run build` -> success (`vibecheck/static/` artifacts emitted).
+
+### Phase 4 reviewer remediation (P1 + integration blockers)
+- Addressed reviewer-reported Phase 4 follow-up issues in frontend core:
+  - `vibecheck/frontend/src/lib/ws.js`
+    - Reset `reconnectAttempts` to `0` on successful `onopen` so reconnect cycles restart at 1s backoff.
+    - Added backlog-array handling in `onmessage` via `mergeEvents(...)` for reconnect payloads.
+    - Filtered `heartbeat` events so they are not persisted into the 500-event FIFO store.
+  - `vibecheck/frontend/src/components/InputBar.svelte`
+    - Added fetch error handling (`catch`) to prevent unhandled rejections.
+    - Added inline error rendering and retained draft text on failure.
+  - `vibecheck/frontend/src/lib/auth.js`
+    - Added session-id safe-storage helpers (`load/store/clear`) to avoid direct unsafe `localStorage` calls in app shell.
+    - Added URL hash cleanup after PSK extraction (`history.replaceState`) to remove `#psk=...` from address bar/history.
+  - `vibecheck/frontend/src/App.svelte`
+    - Replaced direct session `localStorage` usage with auth safe wrappers.
+    - Removed optimistic local `user_message` append to prevent duplicate user bubbles once WS echo arrives.
+    - Reset timeline only when switching to a different session (prevents cross-session mixing without wiping same-session reconnects).
+    - Stopped refresh interval on key clear and centralized refresh timer lifecycle helpers.
+- Test coverage additions/updates:
+  - `vibecheck/frontend/src/lib/ws.test.js`
+    - reconnect reset behavior
+    - heartbeat filtering
+    - reconnect backlog array merge
+  - `vibecheck/frontend/src/components/InputBar.test.js`
+    - error path preserves draft and surfaces status
+  - `vibecheck/frontend/src/App.test.js`
+    - no optimistic user bubble before WS echo
+    - timeline clears on session switch
+  - `vibecheck/frontend/src/lib/auth.test.js`
+    - hash cleanup assertion
+    - session storage helper coverage
+- Verification:
+  - `cd vibecheck/frontend && npm test` -> 9 files passed, 33 tests passed.
+  - `cd vibecheck/frontend && npm run build` -> success (`vibecheck/static/` updated).

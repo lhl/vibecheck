@@ -1,4 +1,4 @@
-import { appendEvent } from '../stores/events'
+import { appendEvent, mergeEvents } from '../stores/events'
 import { CONNECTION_STATES, setConnection } from '../stores/connection'
 
 const HEARTBEAT_TIMEOUT_MS = 45_000
@@ -65,7 +65,8 @@ export function createWebSocket(url, psk) {
   }
 
   const handleOpen = () => {
-    setConnection(CONNECTION_STATES.CONNECTED, reconnectAttempts)
+    reconnectAttempts = 0
+    setConnection(CONNECTION_STATES.CONNECTED, 0)
     armHeartbeatTimer()
   }
 
@@ -73,6 +74,15 @@ export function createWebSocket(url, psk) {
     armHeartbeatTimer()
     try {
       const payload = JSON.parse(raw.data)
+      if (Array.isArray(payload)) {
+        mergeEvents(payload.filter((event) => event?.type !== 'heartbeat'))
+        return
+      }
+
+      if (payload?.type === 'heartbeat') {
+        return
+      }
+
       appendEvent(payload)
     } catch {
       // ignore malformed payloads
