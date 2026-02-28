@@ -207,6 +207,8 @@ cython_debug/
 # vibecheck frontend build artifacts
 vibecheck/frontend/node_modules/
 vibecheck/static/
+!vibecheck/frontend/src/lib/
+!vibecheck/frontend/src/lib/**
 
 # Manual validation artifacts
 artifacts/manual-test/

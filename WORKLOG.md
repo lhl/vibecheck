@@ -391,3 +391,41 @@
   - Gap 2 remained a documented known limitation (`terminal_user_bubble=no_known_limitation`)
 - Artifact policy:
   - Screenshots/recordings intentionally omitted for this run; transcript + checklist evidence used.
+
+### Phase 4 frontend core implementation (WU-13, WU-14, WU-15)
+- Reworked frontend from monolithic `App.svelte` into Phase 4 architecture:
+  - Added WU-13 modules:
+    - `vibecheck/frontend/src/lib/ws.js` with reconnect backoff (1s -> 30s), 45s heartbeat timeout handling, JSON event ingest, and event-store dispatch.
+    - `vibecheck/frontend/src/stores/connection.js` with `connected|connecting|disconnected` state + reconnect attempt tracking.
+    - `vibecheck/frontend/src/stores/events.js` with 500-event FIFO cap, dedupe-by-id merge behavior, and derived stores for `messages`, `pendingApproval`, `pendingInput`, `toolCalls`, and `toolResultsByCall`.
+    - `vibecheck/frontend/src/lib/auth.js` for PSK load/store/clear and URL-hash bootstrap.
+  - Added WU-14 components:
+    - `ConnectionStatus.svelte`
+    - `ChatMessage.svelte` (assistant/user rendering + basic markdown for code blocks/inline code/bold/links)
+    - `ToolCallCard.svelte` (collapsed/expanded args + result/error state)
+  - Added WU-15 components:
+    - `ApprovalPanel.svelte` (approve/deny POST flow + in-flight disable)
+    - `InputBar.svelte` (message vs input POST routing, Enter/Shift+Enter handling, disconnected disable)
+  - Replaced `vibecheck/frontend/src/App.svelte` with a store-driven shell:
+    - PSK gate screen when no key is configured
+    - session controls + websocket lifecycle wiring
+    - chat timeline rendering from stores (messages + tool cards)
+    - auto-scroll logic with user-scroll lockout and `New messages ↓` button
+    - bottom composer wiring for approval/input surfaces
+- Added frontend test harness and suite:
+  - Updated `vibecheck/frontend/package.json` scripts/deps for `vitest`, `jsdom`, and Svelte testing library.
+  - Updated `vibecheck/frontend/vite.config.js` with test environment config.
+  - Added `vibecheck/frontend/src/test-setup.js`.
+  - Added tests:
+    - `src/lib/auth.test.js`
+    - `src/lib/ws.test.js`
+    - `src/stores/events.test.js`
+    - `src/components/ConnectionStatus.test.js`
+    - `src/components/ChatMessage.test.js`
+    - `src/components/ToolCallCard.test.js`
+    - `src/components/ApprovalPanel.test.js`
+    - `src/components/InputBar.test.js`
+    - `src/App.test.js`
+- Verification:
+  - `cd vibecheck/frontend && npm test` -> 9 files passed, 26 tests passed.
+  - `cd vibecheck/frontend && npm run build` -> success (`vibecheck/static/` artifacts emitted).

@@ -1,69 +1,69 @@
 <script>
-  import { onDestroy, onMount } from 'svelte'
+  import { onDestroy, onMount, tick } from 'svelte'
+  import ApprovalPanel from './components/ApprovalPanel.svelte'
+  import ChatMessage from './components/ChatMessage.svelte'
+  import ConnectionStatus from './components/ConnectionStatus.svelte'
+  import InputBar from './components/InputBar.svelte'
+  import ToolCallCard from './components/ToolCallCard.svelte'
+  import { clearStoredPsk, loadInitialPsk, storePsk } from './lib/auth'
+  import { createWebSocket } from './lib/ws'
+  import { connection } from './stores/connection'
+  import { appendEvent, events, pendingApproval, pendingInput, toolResultsByCall } from './stores/events'
 
-  const searchParams = new URLSearchParams(window.location.search)
-  const debugQuery = (searchParams.get('debug') || '').toLowerCase()
-  const debugEnabled = ['1', 'true', 'yes', 'on'].includes(debugQuery)
+  const SESSION_STORAGE_KEY = 'vibecheck_sid'
+  const query = new URLSearchParams(window.location.search)
 
-  const initialSid =
-    searchParams.get('sid') ||
-    searchParams.get('session_id') ||
-    localStorage.getItem('vibecheck_sid') ||
-    ''
-  const initialPsk = searchParams.get('psk') || localStorage.getItem('vibecheck_psk') || ''
+  const initialSessionId =
+    query.get('sid') || query.get('session_id') || localStorage.getItem(SESSION_STORAGE_KEY) || ''
 
-  let psk = initialPsk
-  let sessionId = initialSid
-  let connectionState = 'Disconnected'
-  let stateLabel = 'unknown'
-  let attachMode = 'unknown'
-  let controllable = false
-  let pendingApproval = null
-  let pendingInput = null
+  let psk = loadInitialPsk()
+  let pskDraft = psk
+  let sessionId = initialSessionId
   let sessions = []
-  let logs = []
-  let answerText = ''
-  let messageText = ''
-  let ws = null
-  let lastWsError = ''
-  let wsOpen = false
+  let sessionError = ''
+  let streamElement = null
+  let socketClient = null
   let refreshTimer = null
 
-  const hostBase = `${window.location.protocol}//${window.location.host}`
+  let isNearBottom = true
+  let showNewMessages = false
+  let renderedTimelineCount = 0
 
-  function wsUrlFor(sid) {
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    return `${protocol}://${window.location.host}/ws/events/${encodeURIComponent(sid)}?psk=${encodeURIComponent(psk)}`
-  }
+  $: timeline = $events.filter((event) =>
+    event.type === 'assistant' || event.type === 'user_message' || event.type === 'tool_call',
+  )
+  $: latestState = [...$events].reverse().find((event) => event.type === 'state') || null
 
-  function debugUrlFor(sid) {
-    return `${hostBase}/?debug=1&sid=${encodeURIComponent(sid)}`
-  }
+  $: if (streamElement && timeline.length !== renderedTimelineCount) {
+    const grew = timeline.length > renderedTimelineCount
+    renderedTimelineCount = timeline.length
 
-  function addLog(kind, text) {
-    const line = {
-      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
-      kind,
-      text,
-      time: new Date().toLocaleTimeString(),
+    if (grew) {
+      tick().then(() => {
+        if (!streamElement) {
+          return
+        }
+
+        if (isNearBottom) {
+          streamElement.scrollTop = streamElement.scrollHeight
+          showNewMessages = false
+        } else {
+          showNewMessages = true
+        }
+      })
     }
-    logs = [...logs.slice(-80), line]
   }
 
-  function persistLocalPrefs() {
-    localStorage.setItem('vibecheck_psk', psk)
-    localStorage.setItem('vibecheck_sid', sessionId)
+  function buildEventId(prefix) {
+    return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`
   }
 
-  function applyStatePayload(payload) {
-    stateLabel = payload.state || stateLabel
-    attachMode = payload.attach_mode || attachMode
-    controllable = Boolean(payload.controllable)
-    pendingApproval = payload.pending_approval || null
-    pendingInput = payload.pending_input || null
+  function websocketUrlForSession(id) {
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    return `${protocol}://${window.location.host}/ws/events/${encodeURIComponent(id)}`
   }
 
-  async function fetchJson(path, options = {}) {
+  async function apiJson(path, options = {}) {
     const response = await fetch(path, {
       ...options,
       headers: {
@@ -73,240 +73,172 @@
     })
 
     if (!response.ok) {
-      const body = await response.text()
-      throw new Error(`${response.status} ${response.statusText}: ${body}`)
+      throw new Error(`${response.status} ${response.statusText}`)
     }
 
-    return response.json()
+    const contentType = response.headers.get('content-type') || ''
+    if (contentType.includes('application/json')) {
+      return response.json()
+    }
+
+    return null
   }
 
   async function refreshSessions() {
     if (!psk) {
       sessions = []
+      sessionError = ''
       return
     }
+
     try {
-      const payload = await fetchJson('/api/sessions')
+      const payload = await apiJson('/api/sessions')
       sessions = Array.isArray(payload) ? payload : []
+      sessionError = ''
 
       if (!sessionId && sessions.length > 0) {
-        const preferred =
-          sessions.find((item) => item.attach_mode === 'live' && item.controllable) ||
-          sessions.find((item) => item.controllable) ||
-          sessions[0]
-        sessionId = preferred.id
+        sessionId = sessions[0].id
+      }
+
+      if (sessionId) {
+        localStorage.setItem(SESSION_STORAGE_KEY, sessionId)
       }
     } catch (error) {
-      addLog('error', `sessions refresh failed: ${String(error)}`)
+      sessionError = error instanceof Error ? error.message : 'Failed to load sessions'
     }
   }
 
-  async function refreshState() {
+  function connectSocket() {
     if (!psk || !sessionId) {
       return
     }
-    try {
-      const payload = await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}/state`)
-      applyStatePayload(payload)
-    } catch (error) {
-      addLog('error', `state refresh failed: ${String(error)}`)
-    }
+
+    disconnectSocket()
+    socketClient = createWebSocket(websocketUrlForSession(sessionId), psk)
+    socketClient.connect()
   }
 
-  function disconnectWs() {
-    if (!ws) {
-      wsOpen = false
-      connectionState = 'Disconnected'
+  function disconnectSocket() {
+    if (!socketClient) {
       return
     }
 
-    ws.onopen = null
-    ws.onmessage = null
-    ws.onerror = null
-    ws.onclose = null
-    ws.close()
-    ws = null
-    wsOpen = false
-    connectionState = 'Disconnected'
+    socketClient.disconnect()
+    socketClient = null
   }
 
-  function handleEvent(event) {
-    switch (event.type) {
-      case 'connected':
-        addLog('system', `connected to ${event.session_id}`)
-        break
-      case 'state':
-        stateLabel = event.state || stateLabel
-        attachMode = event.attach_mode || attachMode
-        controllable = Boolean(event.controllable)
-        break
-      case 'approval_request':
-        pendingApproval = {
-          call_id: event.call_id,
-          tool_name: event.tool_name,
-          args: event.args,
-        }
-        addLog('approval', `approval requested: ${event.tool_name} (${event.call_id})`)
-        break
-      case 'approval_resolution':
-        if (pendingApproval && pendingApproval.call_id === event.call_id) {
-          pendingApproval = null
-        }
-        addLog('approval', `approval resolved: ${event.call_id} -> ${event.approved ? 'approved' : 'rejected'}`)
-        break
-      case 'input_request':
-        pendingInput = {
-          request_id: event.request_id,
-          question: event.question,
-          options: event.options || [],
-        }
-        addLog('input', `input requested: ${event.request_id}`)
-        break
-      case 'input_resolution':
-        if (pendingInput && pendingInput.request_id === event.request_id) {
-          pendingInput = null
-        }
-        addLog('input', `input resolved: ${event.request_id}`)
-        break
-      case 'assistant':
-        addLog('assistant', event.content || '')
-        break
-      case 'user_message':
-        addLog('user', event.content || '')
-        break
-      case 'tool_call':
-        addLog('tool', `tool call: ${event.tool_name} (${event.call_id})`)
-        break
-      case 'tool_result':
-        addLog('tool', `tool result: ${event.call_id} (${event.is_error ? 'error' : 'ok'})`)
-        break
-      case 'heartbeat':
-        break
-      default:
-        addLog('system', `event: ${event.type || 'unknown'}`)
-        break
-    }
-  }
-
-  async function connectWs() {
-    if (!psk || !sessionId) {
-      connectionState = 'Missing PSK or Session ID'
+  function savePsk() {
+    const trimmed = pskDraft.trim()
+    if (!trimmed) {
       return
     }
 
-    persistLocalPrefs()
-    await refreshState()
-    disconnectWs()
-    lastWsError = ''
-    connectionState = 'Connecting...'
-
-    const url = wsUrlFor(sessionId)
-    ws = new WebSocket(url)
-    ws.onopen = () => {
-      wsOpen = true
-      connectionState = 'Connected'
-      addLog('system', `ws open (${sessionId})`)
-    }
-    ws.onmessage = (raw) => {
-      try {
-        const event = JSON.parse(raw.data)
-        handleEvent(event)
-      } catch (error) {
-        addLog('error', `invalid ws payload: ${String(error)}`)
+    storePsk(trimmed)
+    psk = trimmed
+    refreshSessions().then(() => {
+      if (sessionId) {
+        connectSocket()
       }
-    }
-    ws.onerror = () => {
-      lastWsError = 'WebSocket error'
-      connectionState = 'Error'
-      wsOpen = false
-    }
-    ws.onclose = (event) => {
-      wsOpen = false
-      connectionState = `Disconnected (${event.code})`
+    })
+  }
+
+  function clearPsk() {
+    disconnectSocket()
+    clearStoredPsk()
+    psk = ''
+    pskDraft = ''
+    sessionId = ''
+    sessions = []
+    sessionError = ''
+    localStorage.removeItem(SESSION_STORAGE_KEY)
+  }
+
+  function handleSessionInput(event) {
+    sessionId = event.currentTarget.value.trim()
+    if (sessionId) {
+      localStorage.setItem(SESSION_STORAGE_KEY, sessionId)
     }
   }
 
-  async function approve(approved) {
-    if (!pendingApproval || !sessionId) {
+  function handleSessionSelect(event) {
+    sessionId = event.currentTarget.value
+    if (sessionId) {
+      localStorage.setItem(SESSION_STORAGE_KEY, sessionId)
+      connectSocket()
+    }
+  }
+
+  function onStreamScroll() {
+    if (!streamElement) {
       return
     }
-    try {
-      await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}/approve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          call_id: pendingApproval.call_id,
-          approved,
-        }),
+
+    const distanceFromBottom =
+      streamElement.scrollHeight - (streamElement.scrollTop + streamElement.clientHeight)
+
+    isNearBottom = distanceFromBottom <= 100
+    if (isNearBottom) {
+      showNewMessages = false
+    }
+  }
+
+  function jumpToLatest() {
+    if (!streamElement) {
+      return
+    }
+
+    streamElement.scrollTop = streamElement.scrollHeight
+    isNearBottom = true
+    showNewMessages = false
+  }
+
+  function handleApprovalResolved(callId, approved) {
+    appendEvent({
+      type: 'approval_resolution',
+      id: buildEventId('approval-resolution-local'),
+      timestamp: Date.now() / 1000,
+      call_id: callId,
+      approved,
+      edited_args: null,
+    })
+  }
+
+  function handleSubmitted({ endpoint, payload }) {
+    if (endpoint === 'message') {
+      appendEvent({
+        type: 'user_message',
+        id: buildEventId('user-message-local'),
+        timestamp: Date.now() / 1000,
+        content: payload.content,
       })
-      addLog('approval', `${approved ? 'approved' : 'rejected'} ${pendingApproval.call_id}`)
-      pendingApproval = null
-      await refreshState()
-    } catch (error) {
-      addLog('error', `approve failed: ${String(error)}`)
+      return
     }
-  }
 
-  async function submitAnswer() {
-    if (!pendingInput || !sessionId) {
-      return
-    }
-    const response = answerText.trim()
-    if (!response) {
-      return
-    }
-    try {
-      await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}/input`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          request_id: pendingInput.request_id,
-          response,
-        }),
+    if (endpoint === 'input') {
+      appendEvent({
+        type: 'input_resolution',
+        id: buildEventId('input-resolution-local'),
+        timestamp: Date.now() / 1000,
+        request_id: payload.request_id,
+        response: payload.response,
       })
-      addLog('input', `answered ${pendingInput.request_id}`)
-      answerText = ''
-      pendingInput = null
-      await refreshState()
-    } catch (error) {
-      addLog('error', `answer failed: ${String(error)}`)
     }
-  }
-
-  async function sendMessage() {
-    const content = messageText.trim()
-    if (!content || !sessionId) {
-      return
-    }
-    try {
-      await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}/message`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
-      })
-      addLog('user', content)
-      messageText = ''
-    } catch (error) {
-      addLog('error', `message send failed: ${String(error)}`)
-    }
-  }
-
-  function handleSessionChange(event) {
-    sessionId = event.target.value
-    persistLocalPrefs()
-    connectWs()
   }
 
   onMount(async () => {
-    await refreshSessions()
-    await refreshState()
-    if (psk && sessionId) {
-      connectWs()
+    if (!psk) {
+      return
     }
-    refreshTimer = setInterval(async () => {
-      await refreshSessions()
-      await refreshState()
-    }, 4000)
+
+    await refreshSessions()
+
+    if (sessionId) {
+      connectSocket()
+    }
+
+    refreshTimer = setInterval(() => {
+      refreshSessions()
+    }, 10_000)
   })
 
   onDestroy(() => {
@@ -314,339 +246,322 @@
       clearInterval(refreshTimer)
       refreshTimer = null
     }
-    disconnectWs()
+
+    disconnectSocket()
   })
 </script>
 
-<div class="app-shell">
-  <header class="top-bar">
-    <h1>vibecheck</h1>
-    <span class="status-pill {wsOpen ? 'ok' : 'bad'}">{connectionState}</span>
-  </header>
-
-  <section class="control-card">
-    <p class="label">Session Controls</p>
-
-    <label class="field-label" for="psk">PSK</label>
-    <input id="psk" bind:value={psk} placeholder="Enter PSK" />
-
-    <label class="field-label" for="sid">Session ID</label>
-    <input id="sid" bind:value={sessionId} placeholder="Enter session ID" />
-
-    {#if sessions.length > 0}
-      <label class="field-label" for="sid-select">Known sessions</label>
-      <select id="sid-select" value={sessionId} on:change={handleSessionChange}>
-        {#each sessions as item}
-          <option value={item.id}>
-            {item.id} ({item.attach_mode || 'unknown'}, {item.status || 'unknown'})
-          </option>
-        {/each}
-      </select>
-    {/if}
-
-    <div class="button-row">
-      <button class="touch-target" type="button" on:click={connectWs}>Connect</button>
-      <button class="touch-target muted" type="button" on:click={disconnectWs}>Disconnect</button>
-      <button class="touch-target muted" type="button" on:click={refreshState}>Refresh</button>
-    </div>
-
-    <p class="meta">state={stateLabel} mode={attachMode} controllable={String(controllable)}</p>
-    {#if debugEnabled}
-      <p class="meta">debug_url={debugUrlFor(sessionId)}</p>
-      <p class="meta">ws_url={sessionId ? wsUrlFor(sessionId) : 'n/a'}</p>
-      {#if lastWsError}
-        <p class="meta warn">{lastWsError}</p>
-      {/if}
-    {/if}
-  </section>
-
-  <main class="message-area">
-    {#if pendingApproval}
-      <section class="pending-card approval">
-        <p class="label">Approval Needed</p>
-        <p class="body"><strong>tool:</strong> {pendingApproval.tool_name}</p>
-        <p class="body"><strong>call:</strong> {pendingApproval.call_id}</p>
-        <pre>{JSON.stringify(pendingApproval.args, null, 2)}</pre>
-        <div class="button-row">
-          <button class="touch-target approve" type="button" on:click={() => approve(true)}>Approve</button>
-          <button class="touch-target reject" type="button" on:click={() => approve(false)}>Reject</button>
-        </div>
-      </section>
-    {/if}
-
-    {#if pendingInput}
-      <section class="pending-card input">
-        <p class="label">Input Needed</p>
-        <p class="body">{pendingInput.question}</p>
-        {#if pendingInput.options && pendingInput.options.length > 0}
-          <p class="body">Options: {pendingInput.options.join(' / ')}</p>
-        {/if}
-        <div class="input-row">
-          <input bind:value={answerText} placeholder="Type answer" />
-          <button class="touch-target approve" type="button" on:click={submitAnswer}>Send</button>
-        </div>
-      </section>
-    {/if}
-
-    <section class="placeholder-card">
-      <p class="label">Live Session Stream</p>
-      {#if logs.length === 0}
-        <p class="body">No events yet. Connect, then trigger a tool call from TUI.</p>
-      {:else}
-        <div class="log-list">
-          {#each logs as line}
-            <p class="log-item"><span class="time">{line.time}</span> <span class="kind">{line.kind}</span> {line.text}</p>
-          {/each}
-        </div>
-      {/if}
+{#if !psk}
+  <main class="psk-gate">
+    <section class="gate-card">
+      <h1>Enter PSK</h1>
+      <p>Use the shared key from your deploy environment to unlock mobile controls.</p>
+      <input type="password" bind:value={pskDraft} placeholder="Pre-shared key" />
+      <button type="button" on:click={savePsk}>Save Key</button>
     </section>
   </main>
+{:else}
+  <div class="shell">
+    <header class="app-header">
+      <h1>vibecheck</h1>
+      <ConnectionStatus status={$connection.status} reconnectAttempts={$connection.reconnectAttempts} />
+    </header>
 
-  <footer class="input-bar">
-    <input
-      aria-label="Message input"
-      bind:value={messageText}
-      placeholder={sessionId ? 'Send message to current session' : 'Select session first'}
-      on:keydown={(event) => event.key === 'Enter' && sendMessage()}
-    />
-    <button class="touch-target" type="button" on:click={sendMessage}>Send</button>
-  </footer>
-</div>
+    <section class="session-controls">
+      <label for="session-id">Session</label>
+      <input
+        id="session-id"
+        value={sessionId}
+        placeholder="Session ID"
+        on:change={handleSessionInput}
+      />
+
+      {#if sessions.length > 0}
+        <label for="session-pick">Known Sessions</label>
+        <select id="session-pick" value={sessionId} on:change={handleSessionSelect}>
+          {#each sessions as session}
+            <option value={session.id}>{session.id}</option>
+          {/each}
+        </select>
+      {/if}
+
+      <div class="control-actions">
+        <button type="button" on:click={connectSocket} disabled={!sessionId}>Connect</button>
+        <button type="button" class="secondary" on:click={disconnectSocket}>Disconnect</button>
+        <button type="button" class="secondary" on:click={refreshSessions}>Refresh</button>
+        <button type="button" class="danger" on:click={clearPsk}>Forget Key</button>
+      </div>
+
+      <p class="meta">state: {latestState?.state || 'unknown'}</p>
+      {#if sessionError}
+        <p class="error">{sessionError}</p>
+      {/if}
+    </section>
+
+    <section class="timeline-wrap">
+      <div class="timeline" bind:this={streamElement} on:scroll={onStreamScroll} data-testid="chat-scroll">
+        {#if timeline.length === 0}
+          <p class="empty">No events yet. Connect to a session and trigger a turn.</p>
+        {:else}
+          {#each timeline as event, index (event.id || `${event.type}-${index}`)}
+            {#if event.type === 'tool_call'}
+              <ToolCallCard toolCall={event} result={$toolResultsByCall.get(event.call_id) || null} />
+            {:else}
+              <ChatMessage {event} />
+            {/if}
+          {/each}
+        {/if}
+      </div>
+
+      {#if showNewMessages}
+        <button type="button" class="jump" on:click={jumpToLatest}>New messages ↓</button>
+      {/if}
+    </section>
+
+    <footer class="composer">
+      <ApprovalPanel
+        pendingApproval={$pendingApproval}
+        {sessionId}
+        {psk}
+        onResolved={handleApprovalResolved}
+      />
+      <InputBar
+        {sessionId}
+        {psk}
+        pendingInput={$pendingInput}
+        connectionStatus={$connection.status}
+        onSubmitted={handleSubmitted}
+      />
+    </footer>
+  </div>
+{/if}
 
 <style>
-  :global(:root) {
-    --bg-canvas: #0e1118;
-    --bg-panel: #191f2d;
-    --bg-panel-soft: #222a3b;
-    --text-primary: #f2f5ff;
-    --text-muted: #a8b1c7;
-    --accent: #ff7000;
-    --accent-muted: #ad4d00;
-    --line: #33405c;
-    --good: #1bbf74;
-    --bad: #d65d5d;
-  }
-
   :global(html),
   :global(body) {
     margin: 0;
     min-height: 100%;
     background:
-      radial-gradient(circle at 20% 15%, #1c2439 0, transparent 38%),
-      radial-gradient(circle at 85% 0%, #2e1828 0, transparent 34%),
-      var(--bg-canvas);
-    color: var(--text-primary);
+      radial-gradient(circle at 15% 10%, #20304f, transparent 35%),
+      radial-gradient(circle at 90% 5%, #4f2d19, transparent 28%),
+      #0d111b;
+    color: #eef3ff;
     font-family: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
   }
 
-  .app-shell {
-    box-sizing: border-box;
+  .psk-gate {
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+  }
+
+  .gate-card {
+    width: min(100%, 26rem);
+    border: 1px solid #43557a;
+    border-radius: 16px;
+    background: linear-gradient(160deg, #1b2438, #12192a);
+    padding: 1rem;
+    display: grid;
+    gap: 0.8rem;
+  }
+
+  .gate-card h1 {
+    margin: 0;
+    font-size: 1.2rem;
+  }
+
+  .gate-card p {
+    margin: 0;
+    color: #bbc7e2;
+    line-height: 1.4;
+  }
+
+  .shell {
     display: grid;
     grid-template-rows: auto auto 1fr auto;
     gap: 0.75rem;
     min-height: 100dvh;
     margin: 0 auto;
-    width: min(100%, 428px);
+    width: min(100%, 460px);
     padding:
-      calc(0.75rem + env(safe-area-inset-top))
-      calc(0.75rem + env(safe-area-inset-right))
-      calc(0.75rem + env(safe-area-inset-bottom))
-      calc(0.75rem + env(safe-area-inset-left));
+      calc(0.8rem + env(safe-area-inset-top))
+      calc(0.8rem + env(safe-area-inset-right))
+      calc(0.8rem + env(safe-area-inset-bottom))
+      calc(0.8rem + env(safe-area-inset-left));
   }
 
-  .top-bar {
+  .app-header,
+  .session-controls,
+  .timeline,
+  .composer {
+    border: 1px solid #334766;
+    border-radius: 16px;
+    background: linear-gradient(165deg, #1c2438, #111a2a);
+  }
+
+  .app-header {
     display: flex;
-    align-items: center;
     justify-content: space-between;
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    background: var(--bg-panel);
+    align-items: center;
     padding: 0.75rem;
   }
 
-  .top-bar h1 {
+  .app-header h1 {
     margin: 0;
-    font-size: 1.05rem;
+    font-size: 1.08rem;
     letter-spacing: 0.02em;
-    text-transform: lowercase;
   }
 
-  .status-pill {
-    border: 1px solid var(--accent-muted);
-    border-radius: 999px;
-    padding: 0.35rem 0.65rem;
-    color: #ffd6b0;
-    font-size: 0.8rem;
-    font-weight: 600;
-  }
-
-  .status-pill.ok {
-    border-color: #1f7f55;
-    color: #b5f8d9;
-    background: #0f2e23;
-  }
-
-  .status-pill.bad {
-    border-color: #7a3737;
-    color: #ffcece;
-    background: #311616;
-  }
-
-  .control-card,
-  .placeholder-card,
-  .pending-card {
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    background: linear-gradient(165deg, var(--bg-panel-soft), var(--bg-panel));
-    padding: 0.8rem;
-  }
-
-  .message-area {
+  .session-controls {
+    padding: 0.75rem;
     display: grid;
-    gap: 0.6rem;
-    overflow-y: auto;
-  }
-
-  .pending-card.approval {
-    border-color: #8f5829;
-    background: linear-gradient(165deg, #2c2116, #1f1a15);
-  }
-
-  .pending-card.input {
-    border-color: #2e5e85;
-    background: linear-gradient(165deg, #182636, #141e2a);
-  }
-
-  .label {
-    margin: 0;
-    color: #ffe4ca;
-    font-size: 0.76rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  .body {
-    margin: 0.5rem 0 0;
-    color: var(--text-muted);
-    line-height: 1.35;
-    font-size: 0.9rem;
-  }
-
-  .field-label {
-    display: block;
-    margin-top: 0.5rem;
-    margin-bottom: 0.2rem;
-    color: #d6dcef;
-    font-size: 0.8rem;
-  }
-
-  .meta {
-    margin: 0.45rem 0 0;
-    color: #bfc8df;
-    font-size: 0.74rem;
-    line-height: 1.35;
-    word-break: break-all;
-  }
-
-  .meta.warn {
-    color: #ffbdbd;
-  }
-
-  .button-row,
-  .input-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
     gap: 0.45rem;
-    margin-top: 0.6rem;
   }
 
-  .input-row {
-    grid-template-columns: 1fr auto;
-  }
-
-  .touch-target {
-    min-width: 44px;
-    min-height: 40px;
-    border: 1px solid var(--accent-muted);
-    border-radius: 10px;
-    background: #25150a;
-    color: #ffd9bb;
-    font-weight: 600;
-  }
-
-  .touch-target.muted {
-    border-color: #4f617f;
-    background: #1a2233;
-    color: #d3def5;
-  }
-
-  .touch-target.approve {
-    border-color: #2e8e5d;
-    background: #133324;
-    color: #b9f9d9;
-  }
-
-  .touch-target.reject {
-    border-color: #9b4949;
-    background: #3a1919;
-    color: #ffd1d1;
-  }
-
-  .log-list {
-    margin-top: 0.5rem;
-    display: grid;
-    gap: 0.35rem;
-  }
-
-  .log-item {
-    margin: 0;
-    color: #d1daf0;
-    font-size: 0.82rem;
-    line-height: 1.3;
-    word-break: break-word;
-  }
-
-  .time {
-    color: #8ea0c5;
-    margin-right: 0.2rem;
-  }
-
-  .kind {
-    color: #ffc68f;
-    margin-right: 0.2rem;
-  }
-
-  .input-bar {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 0.5rem;
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    background: var(--bg-panel);
-    padding: 0.5rem;
+  .session-controls label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #9eb0d5;
   }
 
   input,
   select,
-  pre {
-    min-height: 40px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: #0f1421;
-    color: var(--text-muted);
-    padding: 0 0.75rem;
-    box-sizing: border-box;
-    width: 100%;
+  button {
+    font: inherit;
   }
 
-  pre {
-    margin: 0.5rem 0 0;
+  input,
+  select {
+    min-height: 40px;
+    border-radius: 10px;
+    border: 1px solid #405475;
+    background: #0f1727;
+    color: #dce8ff;
+    padding: 0 0.7rem;
+  }
+
+  .control-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.45rem;
+    margin-top: 0.3rem;
+  }
+
+  button {
+    min-height: 40px;
+    border-radius: 10px;
+    border: 1px solid #8a6346;
+    background: #362416;
+    color: #ffe1c6;
+    font-weight: 700;
+  }
+
+  button.secondary {
+    border-color: #48628c;
+    background: #1a2740;
+    color: #d3e5ff;
+  }
+
+  button.danger {
+    border-color: #8b4a4a;
+    background: #351819;
+    color: #ffd1d1;
+  }
+
+  button:disabled {
+    opacity: 0.58;
+  }
+
+  .meta,
+  .error {
+    margin: 0;
+    font-size: 0.76rem;
+  }
+
+  .meta {
+    color: #9eb0d5;
+  }
+
+  .error {
+    color: #ffbbbb;
+  }
+
+  .timeline-wrap {
+    position: relative;
     min-height: 0;
-    max-height: 160px;
-    padding: 0.6rem 0.75rem;
-    overflow: auto;
-    font-size: 0.78rem;
-    line-height: 1.25;
-    white-space: pre-wrap;
+  }
+
+  .timeline {
+    height: 100%;
+    max-height: calc(100dvh - 350px);
+    min-height: 220px;
+    overflow-y: auto;
+    padding: 0.75rem;
+    display: grid;
+    gap: 0.55rem;
+    align-content: start;
+  }
+
+  .empty {
+    margin: 0;
+    color: #afbdd9;
+    font-size: 0.88rem;
+    line-height: 1.4;
+  }
+
+  .jump {
+    position: absolute;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    min-height: 36px;
+    min-width: 148px;
+    border-radius: 999px;
+    border-color: #3b6ea7;
+    background: #16335a;
+    color: #d0e9ff;
+    box-shadow: 0 10px 25px rgb(7 12 24 / 0.35);
+  }
+
+  .composer {
+    padding: 0.65rem;
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  @media (min-width: 700px) {
+    .shell {
+      width: min(100%, 760px);
+      grid-template-columns: 260px 1fr;
+      grid-template-rows: auto 1fr auto;
+      grid-template-areas:
+        'header header'
+        'controls stream'
+        'composer composer';
+    }
+
+    .app-header {
+      grid-area: header;
+    }
+
+    .session-controls {
+      grid-area: controls;
+      align-self: start;
+      position: sticky;
+      top: 0;
+    }
+
+    .timeline-wrap {
+      grid-area: stream;
+    }
+
+    .timeline {
+      max-height: calc(100dvh - 210px);
+    }
+
+    .composer {
+      grid-area: composer;
+    }
   }
 </style>
