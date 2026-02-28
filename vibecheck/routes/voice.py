@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from mistralai import Mistral
@@ -45,6 +45,48 @@ def _guard_audio_size(*, size: int, max_bytes: int) -> None:
     if size > max_bytes:
         raise HTTPException(status_code=413, detail="Audio payload too large")
 
+def _normalize_content_type(value: str | None) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.split(";", 1)[0].strip().lower()
+
+
+def _guard_audio_content_type(content_type: str | None) -> str | None:
+    normalized = _normalize_content_type(content_type)
+    if not normalized:
+        return None
+    if normalized.startswith("audio/") or normalized == "application/octet-stream":
+        return normalized
+    raise HTTPException(status_code=415, detail="Unsupported audio content type")
+
+
+async def _read_request_body_limited(request: Request, max_bytes: int) -> bytes:
+    chunks: list[bytes] = []
+    size = 0
+    async for chunk in request.stream():
+        if not chunk:
+            continue
+        size += len(chunk)
+        _guard_audio_size(size=size, max_bytes=max_bytes)
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+async def _read_upload_limited(upload: object, max_bytes: int) -> bytes:
+    if not hasattr(upload, "read"):
+        raise HTTPException(status_code=400, detail="Audio file is required")
+
+    chunks: list[bytes] = []
+    size = 0
+    while True:
+        chunk = await upload.read(1024 * 1024)  # type: ignore[reportUnknownMemberType]
+        if not chunk:
+            break
+        size += len(chunk)
+        _guard_audio_size(size=size, max_bytes=max_bytes)
+        chunks.append(chunk)
+    return b"".join(chunks)
+
 
 def _segments_duration_ms(segments: Any) -> int:
     if not isinstance(segments, list) or not segments:
@@ -75,12 +117,12 @@ def _map_mistral_error(error: SDKError) -> HTTPException:
 @router.post("/api/voice/transcribe")
 async def transcribe(
     request: Request,
-    language: str = Query("ja"),
+    language: Literal["ja", "en"] = Query("ja"),
 ) -> VoiceTranscriptionResponse:
     content_type = request.headers.get("content-type") or ""
     max_bytes = _max_audio_bytes()
     content_length = request.headers.get("content-length")
-    if content_length:
+    if not content_type.startswith("multipart/form-data") and content_length:
         try:
             _guard_audio_size(size=int(content_length), max_bytes=max_bytes)
         except ValueError:
@@ -94,16 +136,14 @@ async def transcribe(
         upload = form.get("audio") or form.get("file")
         if upload is None:
             raise HTTPException(status_code=400, detail="Audio file is required")
-        if not hasattr(upload, "read"):
-            raise HTTPException(status_code=400, detail="Audio file is required")
-        audio_bytes = await upload.read()  # type: ignore[reportUnknownMemberType]
-        _guard_audio_size(size=len(audio_bytes), max_bytes=max_bytes)
         filename = getattr(upload, "filename", None) or filename
         file_content_type = getattr(upload, "content_type", None)
+        _guard_audio_content_type(file_content_type)
+        audio_bytes = await _read_upload_limited(upload, max_bytes)
     else:
-        audio_bytes = await request.body()
-        _guard_audio_size(size=len(audio_bytes), max_bytes=max_bytes)
         file_content_type = content_type or None
+        _guard_audio_content_type(file_content_type)
+        audio_bytes = await _read_request_body_limited(request, max_bytes)
 
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Audio body is required")

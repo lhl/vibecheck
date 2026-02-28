@@ -95,6 +95,69 @@ async def test_voice_transcribe_accepts_multipart_upload(
 
 
 @pytest.mark.asyncio
+async def test_voice_transcribe_rejects_unsupported_language(
+    client,
+    psk: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.routes.voice as voice_module
+
+    def _should_not_call():
+        raise AssertionError("Mistral client should not be called for invalid query params")
+
+    monkeypatch.setattr(voice_module, "get_mistral_client", _should_not_call)
+
+    response = await client.post(
+        "/api/voice/transcribe?language=fr",
+        headers={"X-PSK": psk, "Content-Type": "audio/webm"},
+        content=b"fake-audio",
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_voice_transcribe_rejects_non_audio_content_type_raw(
+    client,
+    psk: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.routes.voice as voice_module
+
+    def _should_not_call():
+        raise AssertionError("Mistral client should not be called for invalid payloads")
+
+    monkeypatch.setattr(voice_module, "get_mistral_client", _should_not_call)
+
+    response = await client.post(
+        "/api/voice/transcribe",
+        headers={"X-PSK": psk, "Content-Type": "text/plain"},
+        content=b"not-audio",
+    )
+    assert response.status_code == 415
+
+
+@pytest.mark.asyncio
+async def test_voice_transcribe_rejects_non_audio_multipart_upload(
+    client,
+    psk: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.routes.voice as voice_module
+
+    def _should_not_call():
+        raise AssertionError("Mistral client should not be called for invalid payloads")
+
+    monkeypatch.setattr(voice_module, "get_mistral_client", _should_not_call)
+
+    response = await client.post(
+        "/api/voice/transcribe",
+        headers={"X-PSK": psk},
+        files={"audio": ("recording.txt", b"not-audio", "text/plain")},
+    )
+    assert response.status_code == 415
+
+
+@pytest.mark.asyncio
 async def test_voice_transcribe_rejects_oversized_raw_audio(
     client,
     psk: str,
