@@ -157,6 +157,70 @@ describe('App phase 4 shell', () => {
     expect(body).toMatchObject({ call_id: 'tc-1', approved: true })
   })
 
+  it('handles push approve action sent via service worker message', async () => {
+    localStorage.setItem('vibecheck_psk', 'dev-psk')
+    window.history.pushState({}, '', '/?sid=s-1')
+
+    const serviceWorker = new EventTarget()
+    const originalServiceWorker = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker')
+    Object.defineProperty(navigator, 'serviceWorker', { value: serviceWorker, configurable: true })
+
+    try {
+      const fetchSpy = vi.fn((resource, options = {}) => {
+        if (resource === '/api/sessions') {
+          return Promise.resolve(
+            new Response(JSON.stringify([{ id: 's-1', status: 'running' }]), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }),
+          )
+        }
+
+        if (resource === '/api/sessions/s-1/approve' && options.method === 'POST') {
+          return Promise.resolve(
+            new Response(JSON.stringify({ status: 'ok' }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }),
+          )
+        }
+
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))
+      })
+
+      vi.stubGlobal('fetch', fetchSpy)
+
+      render(App)
+
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      serviceWorker.dispatchEvent(
+        new window.MessageEvent('message', {
+          data: { type: 'notification_action', action: 'approve', url: '/?sid=s-1', call_id: 'tc-1' },
+        }),
+      )
+
+      await waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalledWith(
+          '/api/sessions/s-1/approve',
+          expect.objectContaining({ method: 'POST' }),
+        )
+      })
+
+      const approveCall = fetchSpy.mock.calls.find((call) => call[0] === '/api/sessions/s-1/approve')
+      expect(approveCall).toBeTruthy()
+      const body = approveCall[1]?.body ? JSON.parse(approveCall[1].body) : null
+      expect(body).toMatchObject({ call_id: 'tc-1', approved: true })
+      expect(fetchSpy).not.toHaveBeenCalledWith('/api/sessions/s-1/state', expect.anything())
+    } finally {
+      if (originalServiceWorker) {
+        Object.defineProperty(navigator, 'serviceWorker', originalServiceWorker)
+      } else {
+        delete navigator.serviceWorker
+      }
+    }
+  })
+
   it('shows new message button when user is scrolled up', async () => {
     localStorage.setItem('vibecheck_psk', 'dev-psk')
     localStorage.setItem('vibecheck_sid', 's-1')

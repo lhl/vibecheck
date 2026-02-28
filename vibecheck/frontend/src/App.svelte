@@ -403,6 +403,10 @@
       handleNotificationAction(payload.action, payload.url, payload.call_id)
     }
 
+    const serviceWorkerTarget = navigator?.serviceWorker
+    if (serviceWorkerTarget?.addEventListener) {
+      serviceWorkerTarget.addEventListener('message', messageHandler)
+    }
     window.addEventListener('message', messageHandler)
 
     if (psk) {
@@ -422,6 +426,9 @@
     }
 
     return () => {
+      if (serviceWorkerTarget?.removeEventListener) {
+        serviceWorkerTarget.removeEventListener('message', messageHandler)
+      }
       window.removeEventListener('message', messageHandler)
     }
   })

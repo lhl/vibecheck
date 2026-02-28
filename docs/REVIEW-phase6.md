@@ -15,7 +15,7 @@ This file captures the initial Phase 6 review notes and tracks the follow-up fix
 
 Verification (current):
 - Backend: `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` → **116 passed**
-- Frontend: `cd vibecheck/frontend && npm test && npm run build` → **59 passed**, build **OK**
+- Frontend: `cd vibecheck/frontend && npm test && npm run build` → **60 passed**, build **OK**
 
 ### Fix status
 

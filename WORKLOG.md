@@ -8,8 +8,9 @@
 - Fixed **Low**: MicButton `onDestroy` now calls `stopRecording()` to release mic/tracks if component unmounts during recording.
 - Fixed **Low**: STT and translate routes wrap Mistral SDK calls in `asyncio.wait_for` (30s / 15s respectively) and return HTTP 504 on timeout.
 - Fixed FE error UX: ChatMessage and ApprovalPanel now extract JSON `{detail}` from error responses (was showing raw `statusText`).
+- Fixed push notification action handling for already-open clients: App now listens for Service Worker `message` events (`client.postMessage`) in addition to URL `?action=` params (`vibecheck/frontend/src/App.svelte`, `vibecheck/frontend/src/App.test.js`).
 - **Decision**: PSK-in-query-param for REST routes intentionally kept for dev convenience; documented in `docs/PLAN.md` with production hardening note.
-- Test suite: 116 backend (+3 new: call_id in push payload, multi-session idle, STT/translate timeout), 59 frontend, build OK.
+- Test suite: 116 backend (+3 new: call_id in push payload, multi-session idle, STT/translate timeout), 60 frontend, build OK.
 - Updated `docs/REVIEW-phase6.md` fix status and remaining items.
 
 ### Repository setup
