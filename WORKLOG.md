@@ -623,3 +623,16 @@
 - Verification:
   - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
   - `cd vibecheck/frontend && npm test && npm run build` -> pass.
+
+### Phase 6 re-review fixes (Push subscribe + idle escalation + translate validation)
+- Push (frontend):
+  - Reuse an existing `PushManager.getSubscription()` result instead of calling `subscribe()` again (avoids `InvalidStateError` when already subscribed) (`vibecheck/frontend/src/lib/push.js`).
+  - Added coverage for existing-subscription behavior (`vibecheck/frontend/src/lib/push.test.js`).
+- Smart notifications (push wiring):
+  - Wire waiting states into idle escalation: when a session enters `waiting_approval`/`waiting_input`, an idle escalation push can fire at 5/10/15/30 min per intensity level (`vibecheck/push.py`).
+  - Added regression coverage for 5-minute idle escalation on an approval wait (`vibecheck/tests/test_push.py`).
+- Translation:
+  - Added coverage for whitespace-only `target_lang` being rejected after stripping (`vibecheck/tests/test_translate.py`).
+- Verification:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
+  - `cd vibecheck/frontend && npm test && npm run build` -> pass.
