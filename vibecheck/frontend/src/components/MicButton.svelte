@@ -74,13 +74,9 @@
 
     stopRequested = true
     const pending = startPromise
-    if (!pending && !isRecording()) {
-      return
-    }
 
     stopTimer()
     updateElapsed()
-    isUploading = true
     errorMessage = ''
 
     let blob = null
@@ -90,16 +86,20 @@
       }
       blob = await stopRecording()
     } catch (error) {
-      isUploading = false
-      errorMessage = error instanceof Error ? error.message : 'Recording failed'
+      const message = error instanceof Error ? error.message : ''
+      if (message.startsWith('No recording is active')) {
+        return
+      }
+      errorMessage = message || 'Recording failed'
       return
     }
 
     if (!blob || blob.size === 0) {
-      isUploading = false
       errorMessage = 'Recording was empty.'
       return
     }
+
+    isUploading = true
 
     try {
       const response = await fetch(`/api/voice/transcribe?language=${encodeURIComponent(language)}`, {

@@ -1,5 +1,6 @@
 let active = null
 let orphanedStopped = null
+const DEFAULT_MAX_RECORDING_MS = 60_000
 
 function getPreferredMimeType() {
   const preferred = 'audio/webm;codecs=opus'
@@ -32,7 +33,7 @@ export function isRecording() {
   return Boolean(active && active.recorder && active.recorder.state === 'recording')
 }
 
-export async function startRecording() {
+export async function startRecording(options = {}) {
   if (active) {
     return active
   }
@@ -58,6 +59,18 @@ export async function startRecording() {
 
   const chunks = []
   const recorder = new MediaRecorder(stream, { mimeType })
+  const maxMs =
+    typeof options?.maxMs === 'number' && Number.isFinite(options.maxMs) && options.maxMs > 0
+      ? options.maxMs
+      : DEFAULT_MAX_RECORDING_MS
+  let maxTimerId = null
+
+  const clearMaxTimer = () => {
+    if (maxTimerId !== null) {
+      clearTimeout(maxTimerId)
+      maxTimerId = null
+    }
+  }
 
   let resolveStop = null
   let rejectStop = null
@@ -73,6 +86,7 @@ export async function startRecording() {
   }
 
   recorder.onerror = () => {
+    clearMaxTimer()
     stopTracks(stream)
     if (active && active.recorder === recorder) {
       orphanedStopped = stopped
@@ -84,6 +98,7 @@ export async function startRecording() {
   }
 
   recorder.onstop = () => {
+    clearMaxTimer()
     stopTracks(stream)
     const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' })
     if (typeof resolveStop === 'function') {
@@ -96,6 +111,15 @@ export async function startRecording() {
   }
 
   recorder.start(200)
+  maxTimerId = setTimeout(() => {
+    try {
+      if (recorder.state !== 'inactive') {
+        recorder.stop()
+      }
+    } catch {
+      // no-op
+    }
+  }, maxMs)
   active = { recorder, stream, stopped, startedAt: Date.now(), mimeType }
   return active
 }

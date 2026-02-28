@@ -66,6 +66,7 @@ describe('recorder', () => {
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
     vi.resetModules()
+    vi.useRealTimers()
   })
 
   it('clears active state on recorder error so a new recording can start', async () => {
@@ -87,6 +88,25 @@ describe('recorder', () => {
       expect(second).not.toBe(first)
 
       await stopRecording().catch(() => {})
+    } finally {
+      restore()
+    }
+  })
+
+  it('auto-stops recordings after the configured max duration', async () => {
+    vi.useFakeTimers()
+    const { track, restore } = installRecorderMocks()
+    try {
+      const { isRecording, startRecording, stopRecording } = await import('./recorder')
+
+      await startRecording({ maxMs: 25 })
+      expect(isRecording()).toBe(true)
+
+      await vi.advanceTimersByTimeAsync(25)
+      expect(track.stop).toHaveBeenCalled()
+      expect(isRecording()).toBe(false)
+
+      await expect(stopRecording()).resolves.toBeInstanceOf(Blob)
     } finally {
       restore()
     }
