@@ -13,7 +13,13 @@
     storePsk,
     storeSessionId,
   } from './lib/auth'
-  import { loadVoiceLanguage, storeVoiceLanguage } from './lib/settings'
+  import { subscribeToPush, unsubscribeFromPush, isPushSupported } from './lib/push'
+  import {
+    loadNotificationsEnabled,
+    loadVoiceLanguage,
+    storeNotificationsEnabled,
+    storeVoiceLanguage,
+  } from './lib/settings'
   import { createWebSocket } from './lib/ws'
   import { connection } from './stores/connection'
   import {
@@ -39,6 +45,11 @@
   let refreshTimer = null
   let activeSessionId = ''
   let voiceLanguage = loadVoiceLanguage()
+  let notificationsEnabled = loadNotificationsEnabled()
+  let notificationsError = ''
+  let notificationsBusy = false
+
+  $: pushSupported = isPushSupported()
 
   let isNearBottom = true
   let showNewMessages = false
@@ -218,6 +229,30 @@
     storeVoiceLanguage(voiceLanguage)
   }
 
+  async function toggleNotifications() {
+    if (!pushSupported || notificationsBusy) {
+      return
+    }
+
+    notificationsBusy = true
+    notificationsError = ''
+
+    try {
+      if (notificationsEnabled) {
+        await unsubscribeFromPush(psk)
+        notificationsEnabled = false
+      } else {
+        await subscribeToPush(psk)
+        notificationsEnabled = true
+      }
+      storeNotificationsEnabled(notificationsEnabled)
+    } catch (error) {
+      notificationsError = error instanceof Error ? error.message : 'Push request failed'
+    } finally {
+      notificationsBusy = false
+    }
+  }
+
   function onStreamScroll() {
     if (!streamElement) {
       return
@@ -323,6 +358,23 @@
         <option value="ja">JA</option>
         <option value="en">EN</option>
       </select>
+
+      <label for="notify-toggle">Notifications</label>
+      <button
+        id="notify-toggle"
+        type="button"
+        class="secondary"
+        disabled={!pushSupported || notificationsBusy}
+        on:click={toggleNotifications}
+      >
+        {notificationsEnabled ? 'Disable notifications' : 'Enable notifications'}
+      </button>
+      {#if !pushSupported}
+        <p class="meta">Push not supported in this browser.</p>
+      {/if}
+      {#if notificationsError}
+        <p class="error">{notificationsError}</p>
+      {/if}
 
       <div class="control-actions">
         <button type="button" on:click={connectSocket} disabled={!sessionId}>Connect</button>

@@ -1,4 +1,5 @@
 const VOICE_LANGUAGE_KEY = 'vibecheck_voice_language'
+const NOTIFICATIONS_ENABLED_KEY = 'vibecheck_notifications_enabled'
 
 function safeLocalStorageGet(key) {
   try {
@@ -32,3 +33,10 @@ export function storeVoiceLanguage(value) {
   safeLocalStorageSet(VOICE_LANGUAGE_KEY, trimmed)
 }
 
+export function loadNotificationsEnabled() {
+  return safeLocalStorageGet(NOTIFICATIONS_ENABLED_KEY) === 'true'
+}
+
+export function storeNotificationsEnabled(value) {
+  safeLocalStorageSet(NOTIFICATIONS_ENABLED_KEY, value ? 'true' : 'false')
+}

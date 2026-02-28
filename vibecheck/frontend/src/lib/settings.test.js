@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { loadVoiceLanguage, storeVoiceLanguage } from './settings'
+import {
+  loadNotificationsEnabled,
+  loadVoiceLanguage,
+  storeNotificationsEnabled,
+  storeVoiceLanguage,
+} from './settings'
 
 describe('settings', () => {
   beforeEach(() => {
@@ -22,5 +27,12 @@ describe('settings', () => {
     storeVoiceLanguage('fr')
     expect(loadVoiceLanguage()).toBe('ja')
   })
-})
 
+  it('persists notifications enabled toggle', () => {
+    expect(loadNotificationsEnabled()).toBe(false)
+    storeNotificationsEnabled(true)
+    expect(loadNotificationsEnabled()).toBe(true)
+    storeNotificationsEnabled(false)
+    expect(loadNotificationsEnabled()).toBe(false)
+  })
+})

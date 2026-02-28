@@ -28,5 +28,44 @@ self.addEventListener('fetch', (event) => {
 })
 
 self.addEventListener('push', (event) => {
-  console.log('push received', event)
+  let payload = {}
+  try {
+    payload = event.data ? event.data.json() : {}
+  } catch {
+    payload = {}
+  }
+
+  const title = typeof payload.title === 'string' && payload.title.trim() ? payload.title : 'vibecheck'
+  const options = {
+    body: typeof payload.body === 'string' ? payload.body : '',
+    tag: typeof payload.tag === 'string' ? payload.tag : undefined,
+    requireInteraction: Boolean(payload.requireInteraction),
+    data: {
+      url: typeof payload.url === 'string' ? payload.url : '/',
+      action: null,
+    },
+    actions: Array.isArray(payload.actions) ? payload.actions : [],
+  }
+
+  event.waitUntil(self.registration.showNotification(title, options))
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const action = event.action || ''
+  const url = event.notification?.data?.url || '/'
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if (client.url && client.url.includes(url)) {
+          client.postMessage({ type: 'notification_action', action, url })
+          return client.focus()
+        }
+      }
+
+      const decorated = action ? `${url}${url.includes('?') ? '&' : '?'}action=${encodeURIComponent(action)}` : url
+      return self.clients.openWindow(decorated)
+    }),
+  )
 })
