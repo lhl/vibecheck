@@ -76,6 +76,11 @@ export async function subscribeToPush(psk) {
   }
 
   const registration = await navigator.serviceWorker.ready
+  const existing = await registration.pushManager.getSubscription()
+  if (existing) {
+    await sendSubscription(psk, existing)
+    return existing
+  }
   const publicKey = await fetchVapidKey(psk)
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,

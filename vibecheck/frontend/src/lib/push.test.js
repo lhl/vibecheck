@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { __test__, unsubscribeFromPush } from './push'
+import { __test__, subscribeToPush, unsubscribeFromPush } from './push'
 
 describe('push', () => {
   afterEach(() => {
@@ -56,5 +56,41 @@ describe('push', () => {
 
     await expect(unsubscribeFromPush('dev-psk')).rejects.toThrow()
     expect(unsubscribeSpy).not.toHaveBeenCalled()
+  })
+
+  it('reuses an existing push subscription instead of calling subscribe again', async () => {
+    const subscription = {
+      endpoint: 'https://example.com/existing',
+      toJSON: () => ({ endpoint: 'https://example.com/existing' }),
+    }
+    const subscribeSpy = vi.fn(() => Promise.resolve(subscription))
+    const getSubscriptionSpy = vi.fn(() => Promise.resolve(subscription))
+    const registration = {
+      pushManager: {
+        getSubscription: getSubscriptionSpy,
+        subscribe: subscribeSpy,
+      },
+    }
+    stubPushSupport(registration)
+
+    const fetchSpy = vi.fn((resource) => {
+      if (resource === '/api/push/vapid-key') {
+        throw new Error('should not fetch VAPID key when already subscribed')
+      }
+      if (resource === '/api/push/subscribe') {
+        return Promise.resolve(new Response('', { status: 200 }))
+      }
+      throw new Error(`unexpected fetch: ${resource}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    await expect(subscribeToPush('dev-psk')).resolves.toBe(subscription)
+    expect(getSubscriptionSpy).toHaveBeenCalledTimes(1)
+    expect(subscribeSpy).not.toHaveBeenCalled()
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/push/subscribe',
+      expect.objectContaining({ method: 'POST' }),
+    )
   })
 })
