@@ -1369,16 +1369,16 @@ Stretch goal. Makes phone-injected user messages render as user bubbles in the V
 - [ ] Add mount callback (`mount_user_message`) from `VibeCheckApp` to `TuiBridge`
 - [ ] `TuiBridge`: on raw `UserMessageEvent`, dispatch first (preserves `finalize_streaming()`), then mount user bubble via callback
 - [ ] FIFO one-shot dedupe queue (`maxlen=32`) on `TuiBridge` — local prompts marked by `_handle_agent_loop_turn()` are skipped, remote prompts mount
-- [ ] Mark the **rendered** prompt (after `_render_path_prompt()`), not raw input
-- [ ] Rollback mark immediately if `inject_message()` returns `False`; debug-log on rollback
+- [ ] Mark the **rendered** prompt (after `_render_path_prompt()`), not raw input; mark only after `inject_message()` succeeds (no mark on failure = no stale state)
 - [ ] Update `README.md` — remove Gap 2 known limitation
 - [ ] Update `scripts/manual-test/manual-test.howto.md` — S6 becomes strict pass
 - [ ] **Tests:**
   - TuiBridge mounts user bubble for unmarked `UserMessageEvent`
   - TuiBridge skips mount for locally marked prompt
-  - `_handle_agent_loop_turn()` marks prompt before inject
+  - `_handle_agent_loop_turn()` marks prompt only after successful inject
   - Graceful no-op when mount callback is `None`
-  - Mark rollback on inject failure — next remote event is not swallowed
+  - No mark on inject failure — next remote event is not swallowed
+  - Repeated identical local prompts each render exactly once (proves FIFO, not set)
 
 **Pre-implementation:** Verify Vibe widget API per checklist in `docs/PLAN-gap2.md`.
 

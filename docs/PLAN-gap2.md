@@ -18,10 +18,10 @@ Vibe's `EventHandler.handle_event()` no-ops on `UserMessageEvent` because the TU
    - TuiBridge holds only the callable, not an app reference.
 
 3. **Local-prompt dedupe guard (FIFO one-shot queue, not set-based).**
-   - `_handle_agent_loop_turn()` marks the **rendered** prompt (after `_render_path_prompt`, before `inject_message()`) by appending it to a FIFO queue on TuiBridge.
+   - `_handle_agent_loop_turn()` calls `inject_message()` first, then marks the **rendered** prompt (after `_render_path_prompt`) by appending to a FIFO queue on TuiBridge **only if inject succeeds**. No mark on failure = no rollback path needed.
    - `TuiBridge` on raw `UserMessageEvent`: peeks the front of the queue — if content matches, pop and skip mount; otherwise mount the bubble (phone-originated).
    - FIFO one-shot avoids mis-skipping repeated identical prompts (set-based matching would swallow duplicates).
-   - If `inject_message()` returns `False`, the mark must be **immediately rolled back** (pop from queue) to prevent the next remote prompt from being incorrectly swallowed.
+   - Safe because `inject_message()` is synchronous (queues only); the raw `UserMessageEvent` won't arrive until `act()` runs asynchronously, so there's no race between inject and mark.
 
 4. **Keep current raw-event tee path intact.** No upstream Vibe patching needed.
 
@@ -33,16 +33,16 @@ Vibe's `EventHandler.handle_event()` no-ops on `UserMessageEvent` because the TU
 
 1. **FIFO one-shot, not set-based.** Repeated identical prompts are a real scenario (e.g., user retries). A set would mis-skip the second one. A queue pops on first match only.
 2. **Mark the rendered prompt.** The mark must be placed after `_render_path_prompt()` (launcher.py:224), not on raw input, because the raw `UserMessageEvent` from `act()` contains the rendered content.
-3. **Rollback on inject failure.** If `inject_message()` returns `False` (no running loop, observe-only, etc.), pop the mark immediately. Otherwise a stale mark swallows the next legitimate remote prompt.
-4. **Bound the FIFO queue** (`maxlen=32`) and emit a `logger.debug` when rollback occurs, so stale-mark issues are diagnosable in production logs.
+3. **Mark only on inject success.** Only append to the FIFO queue if `inject_message()` returns `True`. No mark on failure = no stale dedupe state, no rollback path. (Supersedes earlier "rollback on failure" design — same invariant, simpler code.)
+4. **Bound the FIFO queue** (`maxlen=32`) and emit a `logger.debug` on queue overflow, so stale-mark issues are diagnosable in production logs.
 5. **Dispatch-then-mount ordering.** `_dispatch(event)` runs first on every raw event (including `UserMessageEvent`) to preserve Vibe's `finalize_streaming()` cleanup. The synthetic user bubble mount happens after dispatch returns.
 
 ## Pre-implementation Checklist
 
 Before coding, verify these against the Vibe source:
 
-- [ ] Exact user message widget class name and import path
-- [ ] `_mount_and_scroll()` existence, owner (app vs container), and signature — prefer public API if available
+- [x] Exact user message widget class name and import path — **confirmed:** `UserMessage` widget, mount via `await app._mount_and_scroll(UserMessage(content))` (per Vibe source review)
+- [x] `_mount_and_scroll()` existence, owner (app vs container), and signature — **confirmed:** method on VibeApp, accepts a widget instance. Local UI path uses it in `VibeApp._handle_user_message()`
 - [ ] `act()` preserves verbatim submitted content in yielded `UserMessageEvent` (content-based dedupe depends on this)
 - [ ] Async safety: confirm `on_bridge_raw_event` runs on the Textual event loop (same asyncio loop), not a worker thread — determines whether mount callback needs `call_from_thread()`
 
@@ -52,7 +52,8 @@ Before coding, verify these against the Vibe source:
 2. TuiBridge skips mount when prompt was locally marked (no duplicate).
 3. `VibeCheckApp._handle_agent_loop_turn()` marks local prompt before `inject_message()`.
 4. TuiBridge handles `UserMessageEvent` gracefully when mount callback is `None`.
-5. Local mark rollback on inject failure — if `inject_message()` returns `False`, the pending mark is cleared and the next remote `UserMessageEvent` is not swallowed.
+5. No mark on inject failure — if `inject_message()` returns `False`, no mark is added and the next remote `UserMessageEvent` is not swallowed.
+6. Repeated identical local prompts each render exactly once (proves FIFO one-shot, not set-based dedup).
 
 ## Acceptance Criteria
 
