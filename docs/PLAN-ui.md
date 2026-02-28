@@ -101,8 +101,8 @@ The bottom-most bar of the app. Compact single-line strip.
 - Right: token/cost counter (e.g. "$0.42 | 12K tokens") — always visible, updates in real time
 
 **Interactive elements:**
-- Tap to expand status panel (or long-press for YOLO toggle)
-- YOLO mode toggle: hidden by default, revealed via status line interaction. When active, pulsing visual indicator + "YOLO" badge
+- Tap cost ticker (bottom-right) while agent is running → expand to large cost/token overlay (modal, big numbers, fun to watch charges rack up live during demo). Dismisses on tap or when agent goes idle. No-op if not actively ticking.
+- Tap status text (bottom-left) or long-press → YOLO mode toggle. When active, pulsing visual indicator + "YOLO" badge
 - Future: intensity level, snooze controls (deferred)
 
 ---
