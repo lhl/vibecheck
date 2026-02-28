@@ -44,8 +44,24 @@ describe('App phase 4 shell', () => {
           return Promise.resolve(
             new Response(
               JSON.stringify([
-                { id: 's-1', status: 'running' },
-                { id: 's-2', status: 'running' },
+                {
+                  id: 's-1',
+                  status: 'running',
+                  last_activity: '2026-02-28T00:00:00Z',
+                  message_count: 3,
+                  title: 'First session',
+                  attach_mode: 'live',
+                  controllable: true,
+                },
+                {
+                  id: 's-2',
+                  status: 'running',
+                  last_activity: '2026-02-28T00:01:00Z',
+                  message_count: 2,
+                  title: 'Second session',
+                  attach_mode: 'live',
+                  controllable: true,
+                },
               ]),
               { status: 200, headers: { 'Content-Type': 'application/json' } },
             ),
@@ -92,6 +108,7 @@ describe('App phase 4 shell', () => {
 
     render(App)
 
+    await fireEvent.click(screen.getByText('Settings'))
     const button = screen.getByRole('button', { name: 'Auto-translate' })
     expect(button).toHaveTextContent('Enable auto-translate')
 
@@ -226,7 +243,7 @@ describe('App phase 4 shell', () => {
     localStorage.setItem('vibecheck_sid', 's-1')
 
     render(App)
-    await screen.findByRole('combobox', { name: 'Known Sessions' })
+    await screen.findByRole('button', { name: /s-1/i })
 
     const stream = screen.getByTestId('chat-scroll')
     Object.defineProperty(stream, 'scrollHeight', { configurable: true, value: 1000 })
@@ -264,11 +281,43 @@ describe('App phase 4 shell', () => {
     appendEvent({ type: 'assistant', id: 'msg-switch-1', content: 'from session s-1' })
     expect(await screen.findByText('from session s-1')).toBeInTheDocument()
 
-    const picker = await screen.findByRole('combobox', { name: 'Known Sessions' })
-    await fireEvent.change(picker, { target: { value: 's-2' } })
+    const picker = await screen.findByRole('button', { name: /s-2/i })
+    await fireEvent.click(picker)
 
     await waitFor(() => {
       expect(screen.queryByText('from session s-1')).not.toBeInTheDocument()
     })
+  })
+
+  it('falls back to New session when title is missing', async () => {
+    localStorage.setItem('vibecheck_psk', 'dev-psk')
+
+    const fetchSpy = vi.fn((resource) => {
+      if (resource === '/api/sessions') {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                id: 's-blank',
+                status: 'running',
+                last_activity: '2026-02-28T00:00:00Z',
+                message_count: 0,
+                title: null,
+                attach_mode: 'live',
+                controllable: true,
+              },
+            ]),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        )
+      }
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))
+    })
+
+    vi.stubGlobal('fetch', fetchSpy)
+
+    render(App)
+
+    expect(await screen.findByRole('button', { name: /new session/i })).toBeInTheDocument()
   })
 })

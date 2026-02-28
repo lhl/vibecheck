@@ -87,3 +87,18 @@ async def message(session_id: str, body: MessageRequest) -> dict[str, str]:
             detail="Vibe runtime unavailable; message was not forwarded to AgentLoop",
         )
     return {"status": "queued"}
+
+
+@router.post("/api/sessions/{session_id}/resume")
+async def resume_session(session_id: str) -> dict:
+    try:
+        session_manager.resume(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Unknown session: {session_id}") from exc
+    return session_manager.session_detail(session_id)
+
+
+@router.get("/api/sessions/{session_id}/diffs")
+async def session_diffs(session_id: str) -> list[dict]:
+    bridge = _session_or_404(session_id)
+    return bridge.diffs_payload()

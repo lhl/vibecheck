@@ -112,6 +112,8 @@ class SessionBridge:
         self._local_input_callback: Callable[[object], object] | None = None
         self._local_approval_owner: object | None = None
         self._local_input_owner: object | None = None
+        self._pending_file_reads: dict[str, dict[str, object]] = {}
+        self._file_diffs: deque[dict[str, object]] = deque(maxlen=50)
 
     @property
     def controllable(self) -> bool:
@@ -302,6 +304,220 @@ class SessionBridge:
 
     def backlog(self, limit: int = 50) -> list[Event]:
         return list(self.event_backlog)[-limit:]
+
+    def diffs_payload(self) -> list[dict[str, object]]:
+        return list(self._file_diffs)
+
+    def _capture_tool_call_file_state(self, event: ToolCallEvent) -> None:
+        tool = event.tool_name
+        if tool not in {"write_file", "search_replace"}:
+            return
+
+        args = event.args
+        raw_path = args.get("path") if tool == "write_file" else args.get("file_path")
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            return
+
+        file_path = Path(raw_path).expanduser()
+        if not file_path.is_absolute():
+            file_path = (Path.cwd() / file_path).resolve()
+        else:
+            file_path = file_path.resolve()
+
+        before: str | None = None
+        try:
+            if file_path.exists() and file_path.is_file():
+                before = file_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            before = None
+
+        self._pending_file_reads[event.call_id] = {
+            "tool_name": tool,
+            "path": str(file_path),
+            "before": before,
+            "timestamp": event.timestamp,
+        }
+
+    def _finalize_tool_call_file_state(self, event: ToolResultEvent) -> None:
+        pending = self._pending_file_reads.pop(event.call_id, None)
+        if not pending:
+            return
+
+        path = pending.get("path")
+        if not isinstance(path, str) or not path:
+            return
+
+        after: str | None = None
+        try:
+            file_path = Path(path)
+            if file_path.exists() and file_path.is_file():
+                after = file_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            after = None
+
+        before = pending.get("before") if isinstance(pending.get("before"), (str, type(None))) else None
+        before_text = before or ""
+        after_text = after or ""
+
+        try:
+            import difflib
+
+            diff_lines = difflib.unified_diff(
+                before_text.splitlines(keepends=True),
+                after_text.splitlines(keepends=True),
+                fromfile=f"{path} (before)",
+                tofile=f"{path} (after)",
+            )
+            unified = "".join(diff_lines)
+        except Exception:
+            unified = ""
+
+        self._file_diffs.append(
+            {
+                "call_id": event.call_id,
+                "tool_name": str(pending.get("tool_name") or ""),
+                "path": path,
+                "before": before,
+                "after": after,
+                "unified_diff": unified,
+                "timestamp": float(pending.get("timestamp") or time.time()),
+                "is_error": bool(event.is_error),
+            }
+        )
+
+    def load_history_from_dir(self, session_dir: Path, *, limit: int = 50) -> None:
+        messages_path = session_dir / "messages.jsonl"
+        meta_path = session_dir / "meta.json"
+
+        messages: list[dict[str, object]] = []
+        if messages_path.exists():
+            from collections import deque as _deque
+
+            collected: _deque[dict[str, object]] = _deque(maxlen=limit)
+            try:
+                with messages_path.open("r", encoding="utf-8", errors="replace") as handle:
+                    for line in handle:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            payload = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        if isinstance(payload, dict):
+                            collected.append(payload)
+            except OSError:
+                collected = _deque(maxlen=limit)
+            messages = list(collected)
+
+        metadata: dict[str, object] = {}
+        if meta_path.exists():
+            try:
+                payload = json.loads(meta_path.read_text(encoding="utf-8"))
+                if isinstance(payload, dict):
+                    metadata = payload
+            except (OSError, json.JSONDecodeError):
+                metadata = {}
+
+        if not messages:
+            return
+
+        for message in messages:
+            role = message.get("role")
+            if role == "user":
+                content = message.get("content")
+                if isinstance(content, str) and content:
+                    self.add_event(UserMessageEvent(content=content))
+                continue
+
+            if role == "assistant":
+                tool_calls = message.get("tool_calls")
+                if isinstance(tool_calls, list):
+                    for call in tool_calls:
+                        if not isinstance(call, dict):
+                            continue
+                        call_id = call.get("id")
+                        function = call.get("function") if isinstance(call.get("function"), dict) else {}
+                        name = function.get("name")
+                        raw_args = function.get("arguments")
+                        parsed_args: dict = {}
+                        if isinstance(raw_args, str) and raw_args:
+                            try:
+                                parsed = json.loads(raw_args)
+                                if isinstance(parsed, dict):
+                                    parsed_args = parsed
+                            except json.JSONDecodeError:
+                                parsed_args = {"arguments": raw_args}
+                        if isinstance(name, str) and isinstance(call_id, str):
+                            self.add_event(ToolCallEvent(tool_name=name, args=parsed_args, call_id=call_id))
+
+                content = message.get("content")
+                if isinstance(content, str) and content:
+                    self.add_event(AssistantEvent(content=content))
+                continue
+
+            if role == "tool":
+                content = message.get("content")
+                tool_call_id = message.get("tool_call_id")
+                if isinstance(content, str) and isinstance(tool_call_id, str) and tool_call_id:
+                    self.add_event(ToolResultEvent(call_id=tool_call_id, output=content, is_error=False))
+                continue
+
+        if self._agent_loop is None and self.controllable:
+            try:
+                self._ensure_agent_loop()
+            except RuntimeError:
+                return
+
+        agent_loop = self._agent_loop
+        if agent_loop is None:
+            return
+
+        history: list[object] = []
+        llm_message_cls = None
+        try:
+            types_module = _import_vibe_module("vibe.core.types")
+            llm_message_cls = getattr(types_module, "LLMMessage", None)
+        except Exception:
+            llm_message_cls = None
+        for message in messages:
+            role = message.get("role")
+            if role == "system":
+                continue
+            if llm_message_cls is None:
+                history.append(message)
+                continue
+            try:
+                validator = getattr(llm_message_cls, "model_validate", None)
+                if callable(validator):
+                    history.append(validator(message))
+                else:
+                    history.append(llm_message_cls(**message))
+            except Exception:
+                history.append(message)
+
+        messages_attr = getattr(agent_loop, "messages", None)
+        if history and hasattr(messages_attr, "extend"):
+            try:
+                messages_attr.extend(history)
+            except Exception:
+                pass
+
+        session_id = metadata.get("session_id")
+        if isinstance(session_id, str) and session_id:
+            if hasattr(agent_loop, "session_id"):
+                try:
+                    setattr(agent_loop, "session_id", session_id)
+                except Exception:
+                    pass
+
+            session_logger = getattr(agent_loop, "session_logger", None)
+            resume = getattr(session_logger, "resume_existing_session", None)
+            if callable(resume):
+                try:
+                    resume(session_id, session_dir)
+                except Exception:
+                    pass
 
     def _set_state(self, state: BridgeState) -> None:
         if self.state == state:
@@ -716,17 +932,21 @@ class SessionBridge:
             return AssistantEvent(content=str(content))
 
         if kind.endswith("ToolCallEvent"):
-            return ToolCallEvent(
+            event = ToolCallEvent(
                 tool_name=str(getattr(raw_event, "tool_name", "tool")),
                 args=self._message_to_dict(getattr(raw_event, "args", {})),
                 call_id=str(getattr(raw_event, "tool_call_id", "")),
             )
+            self._capture_tool_call_file_state(event)
+            return event
 
         if kind.endswith("ToolResultEvent"):
             call_id = str(getattr(raw_event, "tool_call_id", ""))
             error = getattr(raw_event, "error", None)
             if isinstance(error, str) and error:
-                return ToolResultEvent(call_id=call_id, output=error, is_error=True)
+                event = ToolResultEvent(call_id=call_id, output=error, is_error=True)
+                self._finalize_tool_call_file_state(event)
+                return event
 
             result = getattr(raw_event, "result", None)
             if hasattr(result, "model_dump"):
@@ -735,7 +955,9 @@ class SessionBridge:
                 output = ""
             else:
                 output = str(result)
-            return ToolResultEvent(call_id=call_id, output=output, is_error=False)
+            event = ToolResultEvent(call_id=call_id, output=output, is_error=False)
+            self._finalize_tool_call_file_state(event)
+            return event
 
         return None
 
@@ -1031,11 +1253,18 @@ class SessionManager:
             except json.JSONDecodeError:
                 continue
             session_id = meta.get("session_id") or session_dir.name
+            raw_title = meta.get("title")
+            title: str | None = None
+            if isinstance(raw_title, str):
+                cleaned = raw_title.strip()
+                if cleaned:
+                    title = cleaned[:50]
             discovered.append(
                 {
                     "id": session_id,
                     "started_at": meta.get("start_time"),
                     "last_activity": meta.get("end_time") or meta.get("start_time"),
+                    "title": title,
                     "message_count": self._message_count(session_dir),
                     "status": self.sessions.get(session_id).state if session_id in self.sessions else "disconnected",
                     "attach_mode": (
@@ -1120,6 +1349,7 @@ class SessionManager:
                     "id": session_id,
                     "started_at": None,
                     "last_activity": None,
+                    "title": None,
                     "message_count": len(bridge.event_backlog),
                     "status": bridge.state,
                     "attach_mode": bridge.attach_mode,
@@ -1130,6 +1360,39 @@ class SessionManager:
                 discovered[session_id]["attach_mode"] = bridge.attach_mode
                 discovered[session_id]["controllable"] = bridge.controllable
         return list(discovered.values())
+
+    def resume(self, session_id: str) -> SessionBridge:
+        if not self.has_known_session(session_id):
+            raise KeyError(session_id)
+
+        existing = self.sessions.get(session_id)
+        if existing is not None and existing.controllable:
+            return existing
+
+        session_dir = None
+        for candidate in self.logs_root.iterdir():
+            if not candidate.is_dir():
+                continue
+            meta_path = candidate / "meta.json"
+            if not meta_path.exists():
+                continue
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(meta, dict):
+                continue
+            if (meta.get("session_id") or candidate.name) == session_id:
+                session_dir = candidate
+                break
+
+        if session_dir is None:
+            raise KeyError(session_id)
+
+        bridge = self.attach(session_id, attach_mode="managed")
+        if not bridge.event_backlog:
+            bridge.load_history_from_dir(session_dir)
+        return bridge
 
     def fleet_status(self) -> dict[str, int]:
         listed = self.list()

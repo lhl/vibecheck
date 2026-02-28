@@ -191,16 +191,16 @@
 
   .chat-message.assistant {
     justify-self: start;
-    background: linear-gradient(160deg, #26304a, #1a2134);
-    border: 1px solid #394866;
-    color: #e7edff;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    color: var(--fg);
   }
 
   .chat-message.user {
     justify-self: end;
-    background: linear-gradient(160deg, #5c2d07, #8b3f09);
-    border: 1px solid #cb6c29;
-    color: #ffe5d1;
+    background: var(--primary-bg);
+    border: 1px solid var(--primary-border);
+    color: var(--primary-fg);
   }
 
   .message-body {
@@ -212,8 +212,8 @@
 
   .message-body :global(pre) {
     margin: 0;
-    background: rgb(6 10 20 / 0.4);
-    border: 1px solid rgb(95 113 150 / 0.5);
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
     border-radius: 10px;
     padding: 0.55rem;
     overflow-x: auto;
@@ -225,13 +225,13 @@
   }
 
   .message-body :global(a) {
-    color: #9fd9ff;
+    color: var(--session-selected);
   }
 
   .timestamp {
     margin: 0;
     font-size: 0.7rem;
-    color: rgb(235 241 255 / 0.64);
+    color: var(--text-muted);
   }
 
   .meta {
@@ -242,7 +242,7 @@
   }
 
   .translate {
-    border: 1px solid rgb(235 241 255 / 0.22);
+    border: 1px solid var(--card-border);
     background: transparent;
     color: inherit;
     border-radius: 999px;
@@ -260,6 +260,6 @@
   .translate-error {
     margin: 0;
     font-size: 0.72rem;
-    color: #ffbcbc;
+    color: var(--error);
   }
 </style>

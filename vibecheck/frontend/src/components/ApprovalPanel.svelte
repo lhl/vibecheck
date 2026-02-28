@@ -82,8 +82,8 @@
 
 <style>
   .approval-panel {
-    border: 1px solid #85562d;
-    background: linear-gradient(165deg, #2c1f13, #1f170f);
+    border: 1px solid var(--session-status-waiting);
+    background: var(--card-bg-alt);
     border-radius: 14px;
     padding: 0.75rem;
     display: grid;
@@ -100,20 +100,20 @@
     font-size: 0.68rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: #ffcf9d;
+    color: var(--session-status-waiting);
   }
 
   h3 {
     margin: 0;
     font-size: 0.92rem;
-    color: #ffe7cc;
+    color: var(--fg);
   }
 
   .args {
     margin: 0;
     font-size: 0.82rem;
     line-height: 1.35;
-    color: #d8bea1;
+    color: var(--text-muted);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -153,7 +153,7 @@
 
   .error {
     margin: 0;
-    color: #ffbcbc;
+    color: var(--error);
     font-size: 0.75rem;
   }
 </style>

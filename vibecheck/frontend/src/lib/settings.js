@@ -1,6 +1,7 @@
 const VOICE_LANGUAGE_KEY = 'vibecheck_voice_language'
 const NOTIFICATIONS_ENABLED_KEY = 'vibecheck_notifications_enabled'
 const AUTO_TRANSLATE_KEY = 'vibecheck_auto_translate'
+const THEME_KEY = 'vibecheck_theme'
 
 function safeLocalStorageGet(key) {
   try {
@@ -48,4 +49,20 @@ export function loadAutoTranslateEnabled() {
 
 export function storeAutoTranslateEnabled(value) {
   safeLocalStorageSet(AUTO_TRANSLATE_KEY, value ? 'true' : 'false')
+}
+
+export function loadThemePreference() {
+  const stored = safeLocalStorageGet(THEME_KEY)
+  if (stored === 'light' || stored === 'dark' || stored === 'auto') {
+    return stored
+  }
+  return 'auto'
+}
+
+export function storeThemePreference(value) {
+  const trimmed = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (trimmed !== 'light' && trimmed !== 'dark' && trimmed !== 'auto') {
+    return
+  }
+  safeLocalStorageSet(THEME_KEY, trimmed)
 }

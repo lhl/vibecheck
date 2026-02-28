@@ -28,7 +28,7 @@
     gap: 0.45rem;
     font-size: 0.82rem;
     font-weight: 600;
-    color: #d8dfef;
+    color: var(--meta);
   }
 
   .dot {

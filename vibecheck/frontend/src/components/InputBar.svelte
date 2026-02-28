@@ -115,9 +115,9 @@
     display: grid;
     grid-template-columns: auto 1fr auto;
     gap: 0.5rem;
-    border: 1px solid #33415f;
+    border: 1px solid var(--card-border);
     border-radius: 14px;
-    background: #161f32;
+    background: var(--card-bg-alt);
     padding: 0.5rem;
   }
 
@@ -126,9 +126,9 @@
     min-height: 42px;
     max-height: 150px;
     border-radius: 10px;
-    border: 1px solid #3a4a68;
-    background: #101728;
-    color: #dfebff;
+    border: 1px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--input-fg);
     padding: 0.6rem 0.7rem;
     line-height: 1.35;
     font: inherit;
@@ -141,9 +141,9 @@
   button {
     min-width: 72px;
     border-radius: 10px;
-    border: 1px solid #986346;
-    background: #3b281b;
-    color: #ffdcbf;
+    border: 1px solid var(--primary-border);
+    background: var(--primary-bg);
+    color: var(--primary-fg);
     font-weight: 700;
     padding: 0 0.75rem;
   }
@@ -154,7 +154,7 @@
 
   .error {
     margin: 0.4rem 0 0;
-    color: #ffbcbc;
+    color: var(--error);
     font-size: 0.76rem;
   }
 </style>

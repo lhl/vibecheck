@@ -4,6 +4,7 @@
   import ChatMessage from './components/ChatMessage.svelte'
   import ConnectionStatus from './components/ConnectionStatus.svelte'
   import InputBar from './components/InputBar.svelte'
+  import SettingsPanel from './components/SettingsPanel.svelte'
   import ToolCallCard from './components/ToolCallCard.svelte'
   import {
     clearStoredPsk,
@@ -17,9 +18,11 @@
   import {
     loadAutoTranslateEnabled,
     loadNotificationsEnabled,
+    loadThemePreference,
     loadVoiceLanguage,
     storeAutoTranslateEnabled,
     storeNotificationsEnabled,
+    storeThemePreference,
     storeVoiceLanguage,
   } from './lib/settings'
   import { createWebSocket } from './lib/ws'
@@ -27,6 +30,7 @@
   import {
     appendEvent,
     events,
+    mergeEvents,
     pendingApproval,
     pendingInput,
     resetEvents,
@@ -54,8 +58,27 @@
   let notificationsError = ''
   let notificationsBusy = false
   let notificationActionBusy = false
+  let sessionsLoading = false
+  let resumeBusy = ''
+  let theme = loadThemePreference()
+
+  const EVENT_CACHE_PREFIX = 'vibecheck_events_'
+  const EVENT_CACHE_LIMIT = 50
+  let cacheWriteTimer = null
+  let lastHapticCallId = ''
 
   $: pushSupported = isPushSupported()
+
+  $: {
+    const root = document?.documentElement
+    if (root) {
+      if (theme === 'auto') {
+        root.removeAttribute('data-theme')
+      } else {
+        root.setAttribute('data-theme', theme)
+      }
+    }
+  }
 
   let isNearBottom = true
   let showNewMessages = false
@@ -65,6 +88,28 @@
     event.type === 'assistant' || event.type === 'user_message' || event.type === 'tool_call',
   )
   $: latestState = [...$events].reverse().find((event) => event.type === 'state') || null
+
+  $: {
+    const callId = $pendingApproval?.call_id || ''
+    if (callId && callId !== lastHapticCallId) {
+      lastHapticCallId = callId
+      if (navigator?.vibrate) {
+        try {
+          navigator.vibrate(200)
+        } catch {
+          // no-op
+        }
+      }
+    }
+  }
+
+  $: activeSessions = [...sessions]
+    .filter((session) => session?.status && session.status !== 'disconnected' && session.controllable)
+    .sort((a, b) => parseIsoMs(b.started_at || b.last_activity) - parseIsoMs(a.started_at || a.last_activity))
+
+  $: olderSessions = [...sessions]
+    .filter((session) => !session?.controllable || session?.status === 'disconnected')
+    .sort((a, b) => parseIsoMs(b.started_at || b.last_activity) - parseIsoMs(a.started_at || a.last_activity))
 
   $: if (streamElement && timeline.length !== renderedTimelineCount) {
     const grew = timeline.length > renderedTimelineCount
@@ -93,6 +138,117 @@
   function websocketUrlForSession(id) {
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
     return `${protocol}://${window.location.host}/ws/events/${encodeURIComponent(id)}`
+  }
+
+  function parseIsoMs(value) {
+    if (!value || typeof value !== 'string') {
+      return 0
+    }
+    const ms = Date.parse(value)
+    return Number.isFinite(ms) ? ms : 0
+  }
+
+  function formatRelative(value) {
+    const ms = parseIsoMs(value)
+    if (!ms) {
+      return ''
+    }
+
+    const deltaSeconds = Math.max(0, Math.floor((Date.now() - ms) / 1000))
+    if (deltaSeconds < 60) {
+      return `${deltaSeconds}s ago`
+    }
+    const minutes = Math.floor(deltaSeconds / 60)
+    if (minutes < 60) {
+      return `${minutes}m ago`
+    }
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) {
+      return `${hours}h ago`
+    }
+    const days = Math.floor(hours / 24)
+    return `${days}d ago`
+  }
+
+  function statusBadge(session) {
+    const status = session?.status || ''
+    if (status === 'waiting_approval' || status === 'waiting_input') {
+      return 'waiting'
+    }
+    if (status === 'running') {
+      return 'running'
+    }
+    if (status === 'idle') {
+      return 'idle'
+    }
+    return status || 'unknown'
+  }
+
+  function sessionTitle(session) {
+    if (session?.message_count === 0) {
+      return 'New session'
+    }
+
+    const title = session?.title
+    if (typeof title === 'string' && title.trim()) {
+      return title.trim()
+    }
+
+    return 'New session'
+  }
+
+  function sessionIdPreview(id) {
+    if (typeof id !== 'string') {
+      return ''
+    }
+    const trimmed = id.trim()
+    if (trimmed.length <= 10) {
+      return trimmed
+    }
+    return `${trimmed.slice(0, 8)}…`
+  }
+
+  function cacheKey(sessionId) {
+    return `${EVENT_CACHE_PREFIX}${sessionId}`
+  }
+
+  function loadCachedEvents(sessionId) {
+    if (!sessionId) {
+      return []
+    }
+    try {
+      const raw = window.localStorage.getItem(cacheKey(sessionId))
+      if (!raw) {
+        return []
+      }
+      const payload = JSON.parse(raw)
+      return Array.isArray(payload) ? payload : []
+    } catch {
+      return []
+    }
+  }
+
+  function persistCachedEvents(sessionId, list) {
+    if (!sessionId) {
+      return
+    }
+    if (!Array.isArray(list)) {
+      return
+    }
+    try {
+      const sliced = list.slice(Math.max(0, list.length - EVENT_CACHE_LIMIT))
+      window.localStorage.setItem(cacheKey(sessionId), JSON.stringify(sliced))
+    } catch {
+      // no-op
+    }
+  }
+
+  function isConnectableSession(id) {
+    if (!id) {
+      return false
+    }
+    const session = sessions.find((entry) => entry?.id === id) || null
+    return Boolean(session && session.controllable && session.status !== 'disconnected')
   }
 
   async function apiJson(path, options = {}) {
@@ -206,13 +362,19 @@
       return
     }
 
+    sessionsLoading = true
     try {
       const payload = await apiJson('/api/sessions')
       sessions = Array.isArray(payload) ? payload : []
       sessionError = ''
 
       if (!sessionId && sessions.length > 0) {
-        sessionId = sessions[0].id
+        const active = [...sessions]
+          .filter((session) => session?.status && session.status !== 'disconnected' && session.controllable)
+          .sort((a, b) => parseIsoMs(b.started_at || b.last_activity) - parseIsoMs(a.started_at || a.last_activity))
+        if (active.length > 0) {
+          sessionId = active[0].id
+        }
       }
 
       if (sessionId) {
@@ -220,6 +382,8 @@
       }
     } catch (error) {
       sessionError = error instanceof Error ? error.message : 'Failed to load sessions'
+    } finally {
+      sessionsLoading = false
     }
   }
 
@@ -244,11 +408,15 @@
     if (!psk || !sessionId) {
       return
     }
+    if (!isConnectableSession(sessionId)) {
+      return
+    }
 
     const shouldResetTimeline = activeSessionId !== sessionId
     disconnectSocket()
     if (shouldResetTimeline) {
       resetEvents()
+      mergeEvents(loadCachedEvents(sessionId))
       showNewMessages = false
       renderedTimelineCount = 0
     }
@@ -276,7 +444,7 @@
     psk = trimmed
     refreshSessions().then(() => {
       startRefreshTimer()
-      if (sessionId) {
+      if (sessionId && isConnectableSession(sessionId)) {
         connectSocket()
       }
     })
@@ -305,22 +473,62 @@
     }
   }
 
-  function handleSessionSelect(event) {
-    sessionId = event.currentTarget.value
-    if (sessionId) {
-      storeSessionId(sessionId)
+  function switchSession(targetId) {
+    const normalized = typeof targetId === 'string' ? targetId.trim() : ''
+    if (!normalized) {
+      return
+    }
+    sessionId = normalized
+    storeSessionId(normalized)
+    connectSocket()
+  }
+
+  async function resumeSession(targetId) {
+    const normalized = typeof targetId === 'string' ? targetId.trim() : ''
+    if (!normalized || !psk || resumeBusy) {
+      return
+    }
+
+    resumeBusy = normalized
+    sessionError = ''
+
+    try {
+      const payload = await apiJson(`/api/sessions/${encodeURIComponent(normalized)}/resume`, {
+        method: 'POST',
+      })
+      sessionId = normalized
+      storeSessionId(normalized)
       connectSocket()
+      if (payload?.backlog) {
+        mergeEvents(payload.backlog)
+      }
+      await refreshSessions()
+    } catch (error) {
+      sessionError = error instanceof Error ? error.message : 'Failed to resume session'
+    } finally {
+      resumeBusy = ''
     }
   }
 
-  function handleVoiceLanguageSelect(event) {
-    voiceLanguage = event.currentTarget.value
+  function handleVoiceLanguageChange(event) {
+    voiceLanguage = event.detail?.value || event.currentTarget?.value
     storeVoiceLanguage(voiceLanguage)
   }
 
   function toggleAutoTranslate() {
     autoTranslateEnabled = !autoTranslateEnabled
     storeAutoTranslateEnabled(autoTranslateEnabled)
+  }
+
+  function cycleTheme() {
+    if (theme === 'auto') {
+      theme = 'dark'
+    } else if (theme === 'dark') {
+      theme = 'light'
+    } else {
+      theme = 'auto'
+    }
+    storeThemePreference(theme)
   }
 
   async function toggleNotifications() {
@@ -394,6 +602,21 @@
     }
   }
 
+  const unsubscribeEvents = events.subscribe((list) => {
+    if (!activeSessionId) {
+      return
+    }
+
+    if (cacheWriteTimer) {
+      clearTimeout(cacheWriteTimer)
+    }
+
+    cacheWriteTimer = setTimeout(() => {
+      persistCachedEvents(activeSessionId, list)
+      cacheWriteTimer = null
+    }, 250)
+  })
+
   onMount(() => {
     const messageHandler = (event) => {
       const payload = event?.data
@@ -416,7 +639,7 @@
           await refreshSessions()
           startRefreshTimer()
 
-          if (sessionId) {
+          if (sessionId && isConnectableSession(sessionId)) {
             connectSocket()
           }
         } catch {
@@ -436,6 +659,11 @@
   onDestroy(() => {
     stopRefreshTimer()
     disconnectSocket()
+    if (cacheWriteTimer) {
+      clearTimeout(cacheWriteTimer)
+      cacheWriteTimer = null
+    }
+    unsubscribeEvents()
   })
 </script>
 
@@ -456,57 +684,113 @@
     </header>
 
     <section class="session-controls">
-      <label for="session-id">Session</label>
-      <input
-        id="session-id"
-        value={sessionId}
-        placeholder="Session ID"
-        on:change={handleSessionInput}
-      />
-
-      {#if sessions.length > 0}
-        <label for="session-pick">Known Sessions</label>
-        <select id="session-pick" value={sessionId} on:change={handleSessionSelect}>
-          {#each sessions as session}
-            <option value={session.id}>{session.id}</option>
-          {/each}
-        </select>
-      {/if}
-
-      <label for="voice-lang">Voice language</label>
-      <select id="voice-lang" value={voiceLanguage} on:change={handleVoiceLanguageSelect}>
-        <option value="ja">JA</option>
-        <option value="en">EN</option>
-      </select>
-
-      <label for="translate-toggle">Auto-translate</label>
-      <button id="translate-toggle" type="button" class="secondary" on:click={toggleAutoTranslate}>
-        {autoTranslateEnabled ? 'Disable auto-translate' : 'Enable auto-translate'}
-      </button>
-
-      <label for="notify-toggle">Notifications</label>
-      <button
-        id="notify-toggle"
-        type="button"
-        class="secondary"
-        disabled={!pushSupported || notificationsBusy}
-        on:click={toggleNotifications}
-      >
-        {notificationsEnabled ? 'Disable notifications' : 'Enable notifications'}
-      </button>
-      {#if !pushSupported}
-        <p class="meta">Push not supported in this browser.</p>
-      {/if}
-      {#if notificationsError}
-        <p class="error">{notificationsError}</p>
-      {/if}
-
-      <div class="control-actions">
-        <button type="button" on:click={connectSocket} disabled={!sessionId}>Connect</button>
-        <button type="button" class="secondary" on:click={disconnectSocket}>Disconnect</button>
-        <button type="button" class="secondary" on:click={refreshSessions}>Refresh</button>
-        <button type="button" class="danger" on:click={clearPsk}>Forget Key</button>
+      <div class="session-header">
+        <h2>Sessions</h2>
+        <button type="button" class="secondary" on:click={refreshSessions} disabled={sessionsLoading}>
+          {sessionsLoading ? 'Refreshing…' : 'Refresh'}
+        </button>
       </div>
+
+      {#if activeSessions.length > 0}
+        <p class="section-label">Active</p>
+        <ul class="session-list" aria-label="Active sessions">
+          {#each activeSessions as session}
+            <li>
+              <button
+                type="button"
+                class="session-item"
+                class:selected={session.id === sessionId}
+                on:click={() => switchSession(session.id)}
+              >
+                <div class="row">
+                  <span class="session-title">{sessionTitle(session)}</span>
+                  <span class="status {statusBadge(session)}">{statusBadge(session)}</span>
+                </div>
+                <div class="row meta-line">
+                  <span class="meta">started {formatRelative(session.started_at || session.last_activity)}</span>
+                  {#if session.last_activity}
+                    <span class="meta">active {formatRelative(session.last_activity)}</span>
+                  {/if}
+                  <span class="meta">{session.message_count || 0} msgs</span>
+                  <span class="meta mono" title={session.id}>{sessionIdPreview(session.id)}</span>
+                </div>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <p class="meta">No active sessions detected.</p>
+      {/if}
+
+      <details class="older-sessions">
+        <summary>Browse older sessions</summary>
+        {#if olderSessions.length === 0}
+          <p class="meta">No older sessions found.</p>
+        {:else}
+          <ul class="session-list" aria-label="Older sessions">
+            {#each olderSessions as session}
+              <li class="session-old">
+                <div class="session-old-meta">
+                  <p class="session-old-title">{sessionTitle(session)}</p>
+                  <p class="meta">
+                    started {formatRelative(session.started_at || session.last_activity)}
+                    {#if session.last_activity}
+                      · active {formatRelative(session.last_activity)}
+                    {/if}
+                    · {session.message_count || 0} msgs
+                  </p>
+                  <p class="meta mono" title={session.id}>{sessionIdPreview(session.id)}</p>
+                </div>
+                <button
+                  type="button"
+                  class="secondary"
+                  on:click={() => resumeSession(session.id)}
+                  disabled={resumeBusy === session.id}
+                >
+                  {resumeBusy === session.id ? 'Resuming…' : 'Resume'}
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </details>
+
+      <details class="advanced">
+        <summary>Advanced</summary>
+        <label for="session-id">Session ID</label>
+        <input
+          id="session-id"
+          value={sessionId}
+          placeholder="Session ID"
+          on:change={handleSessionInput}
+        />
+
+        <div class="control-actions">
+          <button
+            type="button"
+            on:click={connectSocket}
+            disabled={!sessionId || !isConnectableSession(sessionId)}
+          >
+            Connect
+          </button>
+          <button type="button" class="secondary" on:click={disconnectSocket}>Disconnect</button>
+        </div>
+      </details>
+
+      <SettingsPanel
+        {voiceLanguage}
+        {autoTranslateEnabled}
+        {notificationsEnabled}
+        {pushSupported}
+        {notificationsBusy}
+        {notificationsError}
+        {theme}
+        on:voiceLanguageChange={handleVoiceLanguageChange}
+        on:toggleTranslate={toggleAutoTranslate}
+        on:toggleNotifications={toggleNotifications}
+        on:cycleTheme={cycleTheme}
+        on:forgetKey={clearPsk}
+      />
 
       <p class="meta">state: {latestState?.state || 'unknown'}</p>
       {#if sessionError}
@@ -517,11 +801,20 @@
     <section class="timeline-wrap">
       <div class="timeline" bind:this={streamElement} on:scroll={onStreamScroll} data-testid="chat-scroll">
         {#if timeline.length === 0}
-          <p class="empty">No events yet. Connect to a session and trigger a turn.</p>
+          <p class="empty">
+            {activeSessionId
+              ? 'No events yet. Trigger a turn in your agent.'
+              : 'Select an active session or resume an older one.'}
+          </p>
         {:else}
           {#each timeline as event, index (event.id || `${event.type}-${index}`)}
             {#if event.type === 'tool_call'}
-              <ToolCallCard toolCall={event} result={$toolResultsByCall.get(event.call_id) || null} />
+              <ToolCallCard
+                toolCall={event}
+                result={$toolResultsByCall.get(event.call_id) || null}
+                sessionId={activeSessionId}
+                {psk}
+              />
             {:else}
               <ChatMessage {event} {psk} autoTranslate={autoTranslateEnabled} />
             {/if}
@@ -554,15 +847,112 @@
 {/if}
 
 <style>
-  :global(html),
-  :global(body) {
-    margin: 0;
-    min-height: 100%;
-    background:
+  :global(html) {
+    --bg:
       radial-gradient(circle at 15% 10%, #20304f, transparent 35%),
       radial-gradient(circle at 90% 5%, #4f2d19, transparent 28%),
       #0d111b;
-    color: #eef3ff;
+    --fg: #eef3ff;
+    --card-border: #334766;
+    --card-border-strong: #43557a;
+    --card-bg: linear-gradient(165deg, #1c2438, #111a2a);
+    --card-bg-alt: linear-gradient(160deg, #1b2438, #12192a);
+    --text-muted: #bbc7e2;
+    --label: #9eb0d5;
+    --input-border: #405475;
+    --input-bg: #0f1727;
+    --input-fg: #dce8ff;
+    --primary-border: #8a6346;
+    --primary-bg: #362416;
+    --primary-fg: #ffe1c6;
+    --secondary-border: #48628c;
+    --secondary-bg: #1a2740;
+    --secondary-fg: #d3e5ff;
+    --danger-border: #8b4a4a;
+    --danger-bg: #351819;
+    --danger-fg: #ffd1d1;
+    --meta: #9eb0d5;
+    --error: #ffbbbb;
+    --empty: #afbdd9;
+    --session-bg: rgb(8 12 22 / 0.25);
+    --session-border: #2d3852;
+    --session-selected: #3b6ea7;
+    --session-status-waiting: #cb6c29;
+    --session-status-running: #4f6a9d;
+    --session-status-idle: #48628c;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :global(html:not([data-theme])) {
+      --bg: #f6f8ff;
+      --fg: #111827;
+      --card-border: #c7d3eb;
+      --card-border-strong: #c7d3eb;
+      --card-bg: #ffffff;
+      --card-bg-alt: #ffffff;
+      --text-muted: #475569;
+      --label: #475569;
+      --input-border: #c7d3eb;
+      --input-bg: #ffffff;
+      --input-fg: #111827;
+      --primary-border: #2563eb;
+      --primary-bg: #2563eb;
+      --primary-fg: #ffffff;
+      --secondary-border: #cbd5e1;
+      --secondary-bg: #e2e8f0;
+      --secondary-fg: #0f172a;
+      --danger-border: #fecaca;
+      --danger-bg: #fee2e2;
+      --danger-fg: #7f1d1d;
+      --meta: #475569;
+      --error: #b91c1c;
+      --empty: #475569;
+      --session-bg: rgb(15 23 42 / 0.04);
+      --session-border: #cbd5e1;
+      --session-selected: #2563eb;
+      --session-status-waiting: #b45309;
+      --session-status-running: #2563eb;
+      --session-status-idle: #64748b;
+    }
+  }
+
+  :global(html[data-theme='light']) {
+    --bg: #f6f8ff;
+    --fg: #111827;
+    --card-border: #c7d3eb;
+    --card-border-strong: #c7d3eb;
+    --card-bg: #ffffff;
+    --card-bg-alt: #ffffff;
+    --text-muted: #475569;
+    --label: #475569;
+    --input-border: #c7d3eb;
+    --input-bg: #ffffff;
+    --input-fg: #111827;
+    --primary-border: #2563eb;
+    --primary-bg: #2563eb;
+    --primary-fg: #ffffff;
+    --secondary-border: #cbd5e1;
+    --secondary-bg: #e2e8f0;
+    --secondary-fg: #0f172a;
+    --danger-border: #fecaca;
+    --danger-bg: #fee2e2;
+    --danger-fg: #7f1d1d;
+    --meta: #475569;
+    --error: #b91c1c;
+    --empty: #475569;
+    --session-bg: rgb(15 23 42 / 0.04);
+    --session-border: #cbd5e1;
+    --session-selected: #2563eb;
+    --session-status-waiting: #b45309;
+    --session-status-running: #2563eb;
+    --session-status-idle: #64748b;
+  }
+
+  :global(body) {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--fg);
     font-family: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
   }
 
@@ -575,9 +965,9 @@
 
   .gate-card {
     width: min(100%, 26rem);
-    border: 1px solid #43557a;
+    border: 1px solid var(--card-border-strong);
     border-radius: 16px;
-    background: linear-gradient(160deg, #1b2438, #12192a);
+    background: var(--card-bg-alt);
     padding: 1rem;
     display: grid;
     gap: 0.8rem;
@@ -590,7 +980,7 @@
 
   .gate-card p {
     margin: 0;
-    color: #bbc7e2;
+    color: var(--text-muted);
     line-height: 1.4;
   }
 
@@ -612,9 +1002,9 @@
   .session-controls,
   .timeline,
   .composer {
-    border: 1px solid #334766;
+    border: 1px solid var(--card-border);
     border-radius: 16px;
-    background: linear-gradient(165deg, #1c2438, #111a2a);
+    background: var(--card-bg);
   }
 
   .app-header {
@@ -640,22 +1030,162 @@
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #9eb0d5;
+    color: var(--label);
+  }
+
+  .session-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .session-header h2 {
+    margin: 0;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .section-label {
+    margin: 0.35rem 0 0;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--label);
+  }
+
+  .session-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.45rem;
+  }
+
+  .session-item {
+    width: 100%;
+    text-align: left;
+    padding: 0.65rem;
+    border: 1px solid var(--session-border);
+    background: var(--session-bg);
+    color: inherit;
+    border-radius: 12px;
+    display: grid;
+    gap: 0.35rem;
+    cursor: pointer;
+  }
+
+  .session-item.selected {
+    border-color: var(--session-selected);
+    box-shadow: 0 0 0 1px var(--session-selected);
+  }
+
+  .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .meta-line {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .session-title {
+    font-weight: 700;
+    font-size: 0.88rem;
+  }
+
+  .status {
+    border: 1px solid var(--session-status-idle);
+    background: color-mix(in srgb, var(--session-status-idle) 18%, transparent);
+    color: var(--fg);
+    border-radius: 999px;
+    padding: 0.1rem 0.55rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    flex: 0 0 auto;
+  }
+
+  .status.waiting {
+    border-color: var(--session-status-waiting);
+    background: color-mix(in srgb, var(--session-status-waiting) 18%, transparent);
+  }
+
+  .status.running {
+    border-color: var(--session-status-running);
+    background: color-mix(in srgb, var(--session-status-running) 18%, transparent);
+  }
+
+  .status.idle {
+    border-color: var(--session-status-idle);
+    background: color-mix(in srgb, var(--session-status-idle) 18%, transparent);
+  }
+
+  .mono {
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-size: 0.72rem;
+    word-break: break-all;
+  }
+
+  .session-controls details {
+    border: 1px solid var(--session-border);
+    background: var(--session-bg);
+    border-radius: 12px;
+    padding: 0.6rem;
+  }
+
+  .session-controls summary {
+    cursor: pointer;
+    list-style: none;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--label);
+  }
+
+  .session-controls summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .session-old {
+    display: flex;
+    gap: 0.6rem;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .session-old-meta {
+    display: grid;
+    gap: 0.2rem;
+    min-width: 0;
+  }
+
+  .session-old-title {
+    margin: 0;
+    font-weight: 800;
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   input,
-  select,
   button {
     font: inherit;
   }
 
-  input,
-  select {
+  input {
     min-height: 40px;
     border-radius: 10px;
-    border: 1px solid #405475;
-    background: #0f1727;
-    color: #dce8ff;
+    border: 1px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--input-fg);
     padding: 0 0.7rem;
   }
 
@@ -669,22 +1199,16 @@
   button {
     min-height: 40px;
     border-radius: 10px;
-    border: 1px solid #8a6346;
-    background: #362416;
-    color: #ffe1c6;
+    border: 1px solid var(--primary-border);
+    background: var(--primary-bg);
+    color: var(--primary-fg);
     font-weight: 700;
   }
 
   button.secondary {
-    border-color: #48628c;
-    background: #1a2740;
-    color: #d3e5ff;
-  }
-
-  button.danger {
-    border-color: #8b4a4a;
-    background: #351819;
-    color: #ffd1d1;
+    border-color: var(--secondary-border);
+    background: var(--secondary-bg);
+    color: var(--secondary-fg);
   }
 
   button:disabled {
@@ -698,11 +1222,11 @@
   }
 
   .meta {
-    color: #9eb0d5;
+    color: var(--meta);
   }
 
   .error {
-    color: #ffbbbb;
+    color: var(--error);
   }
 
   .timeline-wrap {
@@ -723,7 +1247,7 @@
 
   .empty {
     margin: 0;
-    color: #afbdd9;
+    color: var(--empty);
     font-size: 0.88rem;
     line-height: 1.4;
   }
