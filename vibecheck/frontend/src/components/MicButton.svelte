@@ -12,6 +12,8 @@
   let intervalId = null
   let isUploading = false
   let errorMessage = ''
+  let startPromise = null
+  let stopRequested = false
 
   function updateElapsed() {
     if (!recordingStartedAt) {
@@ -37,26 +39,42 @@
   }
 
   async function begin() {
-    if (disabled || isUploading || isRecording()) {
+    if (disabled || isUploading || startPromise || isRecording()) {
       return
     }
 
     errorMessage = ''
     recordingStartedAt = 0
     elapsedLabel = '0.0s'
+    stopRequested = false
 
     try {
-      await startRecording()
+      const pending = startRecording()
+      startPromise = pending
+      await pending
+      if (stopRequested) {
+        return
+      }
       recordingStartedAt = Date.now()
       updateElapsed()
       startTimer()
     } catch (error) {
-      errorMessage = error instanceof Error ? error.message : 'Recording failed'
+      if (!stopRequested) {
+        errorMessage = error instanceof Error ? error.message : 'Recording failed'
+      }
+    } finally {
+      startPromise = null
     }
   }
 
   async function finish() {
-    if (disabled || isUploading || !isRecording()) {
+    if (disabled || isUploading) {
+      return
+    }
+
+    stopRequested = true
+    const pending = startPromise
+    if (!pending && !isRecording()) {
       return
     }
 
@@ -67,6 +85,9 @@
 
     let blob = null
     try {
+      if (pending) {
+        await pending
+      }
       blob = await stopRecording()
     } catch (error) {
       isUploading = false

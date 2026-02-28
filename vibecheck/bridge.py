@@ -106,6 +106,7 @@ class SessionBridge:
         self._vibe_runtime: VibeRuntime | None = None
         self._observed_message_ids: set[str] = set()
         self._local_user_message_echoes: deque[tuple[str, float]] = deque(maxlen=20)
+        self._active_injected_message: str | None = None
         self._message_observer_hooked = False
         self._local_approval_callback: Callable[[str, object, str], object] | None = None
         self._local_input_callback: Callable[[object], object] | None = None
@@ -820,6 +821,8 @@ class SessionBridge:
 
         self._set_state("running")
         async with self._run_lock:
+            cleaned = content.strip()
+            self._active_injected_message = cleaned if cleaned else None
             try:
                 async for raw_event in self._agent_loop.act(content):
                     await self._notify_raw_event_listeners(raw_event)
@@ -832,6 +835,8 @@ class SessionBridge:
                 await self._broadcast(
                     AssistantEvent(content=f"Bridge failed to process agent event: {exc}")
                 )
+            finally:
+                self._active_injected_message = None
 
     async def _message_worker(self) -> None:
         while True:
@@ -870,9 +875,13 @@ class SessionBridge:
         self._local_user_message_echoes.append((cleaned, time.monotonic()))
         self._broadcast_background(UserMessageEvent(content=cleaned))
 
-    def _consume_local_user_message_echo(self, content: str, *, window_s: float = 60.0) -> bool:
+    def _consume_local_user_message_echo(self, content: str, *, window_s: float = 10.0) -> bool:
         cleaned = content.strip()
         if not cleaned:
+            return False
+
+        active = self._active_injected_message
+        if not active or cleaned != active:
             return False
 
         now = time.monotonic()

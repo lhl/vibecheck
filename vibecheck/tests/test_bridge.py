@@ -395,6 +395,44 @@ async def test_inject_message_broadcasts_user_message_even_when_agent_loop_does_
 
 
 @pytest.mark.asyncio
+async def test_local_user_message_dedupe_does_not_suppress_unrelated_same_content_messages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.bridge as bridge_module
+
+    runtime = bridge_module.VibeRuntime(
+        agent_loop_cls=FakeAgentLoopNoUserEcho,
+        vibe_config_cls=FakeVibeConfig,
+        approval_yes=FakeApprovalResponse.YES,
+        approval_no=FakeApprovalResponse.NO,
+        ask_result_cls=FakeAskUserQuestionResult,
+        answer_cls=FakeAnswer,
+    )
+    monkeypatch.setattr(bridge_module, "load_vibe_runtime", lambda: runtime)
+
+    manager = RecordingConnectionManager()
+    bridge = SessionBridge("dedupe-scope", connection_manager=manager)
+
+    assert bridge.inject_message("ok")
+    await _wait_until(lambda: "tc-1" in bridge.pending_approval)
+    assert bridge.resolve_approval("tc-1", approved=True)
+    await _wait_until(lambda: len(bridge.pending_input) == 1)
+    request_id = next(iter(bridge.pending_input.keys()))
+    assert bridge.resolve_input(request_id=request_id, response="yes")
+    await _wait_until(lambda: bridge.state == "idle")
+
+    bridge._on_message_observed(FakeObservedMessage(role="user", content="ok", message_id="m-user-2"))
+    await asyncio.sleep(0)
+
+    user_messages = [
+        event for _, event in manager.events if event["type"] == "user_message" and event["content"] == "ok"
+    ]
+    assert len(user_messages) == 2
+
+    bridge.stop()
+
+
+@pytest.mark.asyncio
 async def test_edited_args_are_applied_to_tool_invocation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

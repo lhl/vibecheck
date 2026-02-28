@@ -558,3 +558,12 @@
 - Added test coverage in `vibecheck/tests/test_bridge.py`.
 - Verification:
   - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/test_bridge.py -v` -> pass.
+
+### Phase 6 review fixes (MicButton + dedupe)
+- Fixed MicButton press/release race: releasing before `startRecording()` resolves now still triggers a stop/upload once recording starts (`vibecheck/frontend/src/components/MicButton.svelte`).
+- Tightened local `user_message` dedupe:
+  - Narrowed the window and scoped suppression to active turns so same-content messages from other sources are not dropped (`vibecheck/bridge.py`).
+  - Added coverage for both “echo absent” and “late same-content message” cases (`vibecheck/tests/test_bridge.py`).
+- Verification:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
+  - `cd vibecheck/frontend && npm test && npm run build` -> pass.
