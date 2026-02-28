@@ -293,9 +293,6 @@ Multi-session *discovery and switching* is built into L1/L2. This layer adds act
 
 - [ ] **YOLO mode**: hidden toggle that auto-approves all tool calls — reveal during demo for showmanship. `_approval_callback` short-circuits, still logs auto-approved events to timeline. Toggle off to resume manual approval.
 - [ ] **Live token/cost ticker**: real-time `$X.XX | YK tokens` in header, reads from Vibe `agent_loop.stats`. Audience watches charges rack up live.
-- [ ] Live demo mode: public read-only URL for judges/audience
-- [ ] QR code on slide → instant audience participation
-
 ### Deferred (Post-Hackathon)
 
 Features designed but deferred to keep scope tight for submission. Details preserved here so nothing is lost.
@@ -306,6 +303,8 @@ Features designed but deferred to keep scope tight for submission. Details prese
 - Risk scoring: color-code tool calls by danger level (green/yellow/red)
 
 **Showmanship** (L9):
+- Live demo mode: public read-only URL for judges/audience
+- QR code on slide → instant audience participation
 - Replay mode: speed-run playback of a full agent session (scrub through event timeline at 10x, great for recap demos)
 - Confetti animation on task completion
 
