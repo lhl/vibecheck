@@ -28,7 +28,8 @@
 ### PWA chat: suppress streamed assistant chunk bubbles
 - Fixed: PWA was showing a stray first-token assistant bubble ("Under" → "Understood...") because we were broadcasting streamed `AssistantEvent` chunks in addition to the final aggregated message.
 - Bridge now suppresses raw `AssistantEvent`/`UserMessageEvent` yields when message observer is available, keeping middleware STOP messages intact (`vibecheck/bridge.py`).
-- Tests: `uv run pytest vibecheck/tests/ -v` → **120 passed**
+- Fixed: message observer chaining now uses bound-method equivalence checks (instead of `is`) to avoid double-invoking the same observer in some setups (`vibecheck/bridge.py`).
+- Tests: `uv run pytest vibecheck/tests/ -v` → **122 passed**
 
 ### TUI stability: mobile-first message context crash
 - Fixed `LookupError: active_app` crash in Textual markdown rendering when the first prompt comes from mobile (REST) instead of TUI.

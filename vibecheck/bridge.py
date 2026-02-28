@@ -745,6 +745,21 @@ class SessionBridge:
         if hasattr(agent_loop, "set_user_input_callback"):
             agent_loop.set_user_input_callback(self._user_input_callback)
 
+    @staticmethod
+    def _callbacks_match(candidate: object, target: object) -> bool:
+        if candidate is target:
+            return True
+        candidate_func = getattr(candidate, "__func__", None)
+        target_func = getattr(target, "__func__", None)
+        candidate_self = getattr(candidate, "__self__", None)
+        target_self = getattr(target, "__self__", None)
+        return (
+            candidate_func is not None
+            and target_func is not None
+            and candidate_func is target_func
+            and candidate_self is target_self
+        )
+
     def _wire_message_observer(self, agent_loop: object) -> None:
         if self._message_observer_hooked:
             return
@@ -757,12 +772,12 @@ class SessionBridge:
 
         def chained(message: object) -> None:
             self._on_message_observed(message)
-            if callable(existing) and existing is not self._on_message_observed:
+            if callable(existing) and not self._callbacks_match(existing, self._on_message_observed):
                 existing(message)
             if (
                 callable(existing_message_list_observer)
-                and existing_message_list_observer is not self._on_message_observed
-                and existing_message_list_observer is not existing
+                and not self._callbacks_match(existing_message_list_observer, self._on_message_observed)
+                and not self._callbacks_match(existing_message_list_observer, existing)
             ):
                 existing_message_list_observer(message)
 

@@ -404,6 +404,46 @@ async def test_streaming_assistant_chunks_do_not_create_duplicate_chat_bubbles(
 
 
 @pytest.mark.asyncio
+async def test_wire_message_observer_does_not_double_invoke_bridge_observer() -> None:
+    class Messages:
+        def __init__(self, observer) -> None:
+            self._observer = observer
+
+    manager = RecordingConnectionManager()
+    bridge = SessionBridge("observer-dedupe", connection_manager=manager)
+
+    existing = bridge._on_message_observed
+    existing_list_observer = bridge._on_message_observed
+
+    class Loop:
+        def __init__(self) -> None:
+            self.message_observer = existing
+            self.messages = Messages(existing_list_observer)
+
+        def set_approval_callback(self, _callback) -> None:
+            return None
+
+        def set_user_input_callback(self, _callback) -> None:
+            return None
+
+    bridge.attach_to_loop(Loop(), vibe_runtime=None)
+
+    bridge._agent_loop.message_observer(  # noqa: SLF001
+        FakeObservedMessage(role="assistant", content="hi", message_id=None)
+    )
+    await _wait_until(
+        lambda: len([event for _, event in manager.events if event["type"] == "assistant"]) >= 1
+    )
+    await asyncio.sleep(0)
+
+    assistant_events = [event for _, event in manager.events if event["type"] == "assistant"]
+    assert len(assistant_events) == 1
+    assert assistant_events[0]["content"] == "hi"
+
+    bridge.stop()
+
+
+@pytest.mark.asyncio
 async def test_inject_message_lazily_starts_agent_loop_when_runtime_is_available(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
