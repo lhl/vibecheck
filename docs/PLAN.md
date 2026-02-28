@@ -173,6 +173,7 @@ See `docs/ANALYSIS-session-attachment.md` § "Phase 3 Validation: Confirmed Gaps
 ### Layer 3 — Voice Input
 
 > *Demo: "Hold mic button, speak Japanese, see transcription, send to Vibe"*
+> **Prior art:** `frontend-prototype/` has a complete Voxtral STT + ElevenLabs TTS voice loop with backend proxy and Svelte frontend. See `docs/FRONTEND-PROTOTYPE-PLAN.md`.
 
 - [ ] `POST /api/voice/transcribe` — server-side Voxtral batch API proxy
   - Accept `audio/webm;codecs=opus` from MediaRecorder
@@ -253,6 +254,7 @@ See `docs/ANALYSIS-session-attachment.md` § "Phase 3 Validation: Confirmed Gaps
 ### Layer 7 — Stretch: Advanced Voice + ElevenLabs TTS
 
 > *Demo: "Talk to your agent, hear it respond — full voice loop from your phone"*
+> **Prior art:** `frontend-prototype/server/server/app.py` has working ElevenLabs streaming TTS proxy + voice list. `frontend-prototype/frontend/` has audio playback. Port to `vibecheck/routes/tts.py`.
 
 - [ ] **ElevenLabs TTS for agent responses** (Best Voice Use Case prize target)
   - Stream agent `AssistantEvent` text → ElevenLabs TTS API → audio playback on phone

@@ -48,6 +48,7 @@ These are set globally on the development machine. Do not hardcode, auto-generat
 | `vibecheck/frontend/` | Svelte 5 + Vite PWA |
 | `vibecheck/tests/` | Backend pytest suite |
 | `prototypes/` | Standalone browser-API test pages |
+| `frontend-prototype/` | **Standalone STT+TTS voice loop** (Voxtral + ElevenLabs) — reuse for WU-17/18/29/30 |
 | `tests/fixtures/` | Sample event sequences for replay/testing |
 | `reference/mistral-vibe/` | **Vibe source checkout** — read this for AgentLoop, event types, callback signatures |
 

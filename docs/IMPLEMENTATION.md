@@ -402,6 +402,16 @@ prototypes/                  # Standalone browser-API test pages
 └── speech-synthesis/
     ├── index.html
     └── test.sh
+frontend-prototype/              # Standalone STT+TTS voice loop (Voxtral + ElevenLabs)
+├── README.md
+├── MOBILE-QA-CHECKLIST.md
+├── frontend/                    # Svelte 5 app (record → STT → TTS → playback)
+│   ├── src/App.svelte
+│   ├── src/App.test.js
+│   └── e2e/mobile-smoke.spec.js
+└── server/                      # FastAPI proxy (/api/stt, /api/tts, /api/voices)
+    ├── server/app.py
+    └── tests/test_api.py
 scripts/
 ├── smoke_test.sh            # Hit all endpoints, verify responses
 └── replay_events.py         # Replay canned events over WS for FE dev
@@ -528,6 +538,7 @@ Each prototype is a **standalone HTML page** (no build step) with a `server.py` 
 
 **Depends on:** nothing
 **Feeds into:** WU-18 (FE mic button)
+**Prior art:** `frontend-prototype/frontend/src/App.svelte` has a working MediaRecorder flow (record/stop/upload) — reuse for integration.
 
 - [ ] **`server.py`** — HTTP server (:8080)
   - `POST /upload` — receive audio blob, log size + content-type, return `{"text": "テスト", "language": "ja", "duration_ms": 1234}`
@@ -611,6 +622,7 @@ Each prototype is a **standalone HTML page** (no build step) with a `server.py` 
 
 **Depends on:** nothing
 **Feeds into:** Phase 7 stretch (L7 TTS)
+**Prior art:** `frontend-prototype/server/server/app.py` has a working ElevenLabs TTS streaming proxy (`POST /api/tts`) with voice list, error mapping, and tests. `frontend-prototype/frontend/src/App.svelte` has browser audio playback. See `docs/FRONTEND-PROTOTYPE-PLAN.md`.
 
 Two approaches to validate — browser-native (free fallback) and ElevenLabs (high quality, prize target):
 
@@ -1193,6 +1205,7 @@ scripts/smoke_test.sh https://vibecheck.shisa.ai  # remote smoke test
 ### WU-17 + WU-18: Voice Input (L3)
 
 **Depends on:** WU-16 (integration), WU-04 (proto media-recorder)
+**Prior art:** `frontend-prototype/` has a complete Voxtral STT proxy (`POST /api/stt`) with Mistral API integration, multipart upload, error mapping, and backend tests. Frontend has MediaRecorder + transcript display. Port the proxy logic to `vibecheck/routes/voice.py` and adapt the Svelte recorder for `MicButton.svelte`.
 
 **Backend (WU-17):**
 - [ ] **`POST /api/voice/transcribe`** (`routes/voice.py`)
@@ -1389,6 +1402,7 @@ Stretch goals — implement if time allows. L7 (ElevenLabs TTS) is highest prior
 
 **Depends on:** WU-16, WU-08 (proto validation)
 **Parallel with:** WU-30, WU-31
+**Prior art:** `frontend-prototype/server/server/app.py` has a working ElevenLabs streaming TTS proxy (`POST /api/tts`, `GET /api/voices`) with error mapping, voice list, and mocked tests (`frontend-prototype/server/tests/test_api.py`). Port to `vibecheck/routes/tts.py` and add PSK auth.
 
 - [ ] **`POST /api/tts`** (`routes/tts.py`)
   - Accept `{text, language?, voice_id?}` → stream ElevenLabs response as `audio/mpeg`
@@ -1410,6 +1424,7 @@ uv run pytest vibecheck/tests/test_tts.py -v
 
 **Depends on:** WU-16, WU-29
 **Parallel with:** WU-31
+**Prior art:** `frontend-prototype/frontend/src/App.svelte` has browser audio playback of TTS responses (blob URL + Audio element). Adapt for auto-read on `AssistantEvent` and add voice selector wiring.
 
 - [ ] Frontend TTS playback (`AudioContext` or `<audio>`)
   - On `AssistantEvent`: if auto-read enabled, fetch `/api/tts` → play audio
