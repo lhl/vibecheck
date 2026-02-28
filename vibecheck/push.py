@@ -183,6 +183,7 @@ class PushManager:
             path = self._subs_path()
             if not path.exists():
                 return []
+            self._restrict_secret_file(path)
             try:
                 payload = json.loads(path.read_text(encoding="utf-8"))
             except json.JSONDecodeError:
@@ -198,10 +199,12 @@ class PushManager:
     def _store_subscriptions(self, subscriptions: list[dict[str, Any]]) -> None:
         with self._lock:
             self._ensure_storage_dir()
-            self._subs_path().write_text(
+            path = self._subs_path()
+            path.write_text(
                 json.dumps(subscriptions, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
+            self._restrict_secret_file(path)
 
     def subscribe(self, subscription: dict[str, Any]) -> None:
         endpoint = str(subscription.get("endpoint", "")).strip()
@@ -296,10 +299,25 @@ class PushManager:
         for subscription in subscriptions:
             try:
                 await self._send_notification(subscription=subscription, payload=payload, urgency="low")
-            except WebPushException:
+            except WebPushException as error:
+                self._maybe_prune_subscription_on_error(subscription, error)
                 logger.exception("idle push send failed for session %s", session_id)
             except Exception:
                 logger.exception("idle push crashed for session %s", session_id)
+
+    def _maybe_prune_subscription_on_error(self, subscription: dict[str, Any], error: WebPushException) -> None:
+        response = getattr(error, "response", None)
+        status = getattr(response, "status", None)
+        if status is None:
+            status = getattr(response, "status_code", None)
+        if not isinstance(status, int):
+            return
+        if status not in {404, 410}:
+            return
+
+        endpoint = str(subscription.get("endpoint", "")).strip()
+        if endpoint:
+            self.unsubscribe(endpoint)
 
     async def send_for_event(self, session_id: str, event: Event) -> None:
         if event.type == "state":
@@ -336,7 +354,8 @@ class PushManager:
         for subscription in subscriptions:
             try:
                 await self._send_notification(subscription=subscription, payload=payload, urgency=urgency)
-            except WebPushException:
+            except WebPushException as error:
+                self._maybe_prune_subscription_on_error(subscription, error)
                 logger.exception("push send failed for session %s", session_id)
             except Exception:
                 logger.exception("push notification crashed for session %s", session_id)

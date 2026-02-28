@@ -11,6 +11,7 @@ import pytest_asyncio
 
 from vibecheck.app import create_app
 from vibecheck.bridge import session_manager
+from vibecheck.events import ApprovalRequestEvent
 
 
 @pytest.fixture
@@ -204,6 +205,78 @@ async def test_push_sends_idle_escalation_after_waiting_for_approval(
 
     assert bridge.resolve_approval("tc-push-idle-1", approved=True)
     await task
+
+
+@pytest.mark.asyncio
+async def test_push_prunes_subscription_when_endpoint_is_gone(
+    push_client: AsyncClient,
+    psk: str,
+    push_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _ = push_home
+
+    import vibecheck.push as push_module
+
+    manager = push_module._current_push_manager
+    assert manager is not None
+
+    subscription = {
+        "endpoint": "https://example.com/push/gone",
+        "keys": {"p256dh": "p256dh-key", "auth": "auth-key"},
+    }
+    subscribe = await push_client.post(
+        "/api/push/subscribe",
+        headers={"X-PSK": psk},
+        json=subscription,
+    )
+    assert subscribe.status_code == 200
+
+    class _DummyResponse:
+        status = 410
+
+    async def fake_webpush(*_args, **_kwargs):
+        raise push_module.WebPushException("gone", response=_DummyResponse())
+
+    monkeypatch.setattr(push_module, "webpush_async", fake_webpush)
+
+    async def fake_copy(_tool_name: str, _args: dict[str, object]) -> str:
+        return "Approve (test)"
+
+    monkeypatch.setattr(push_module, "generate_notification_copy", fake_copy)
+
+    await manager.send_for_event(
+        "session-gone",
+        ApprovalRequestEvent(call_id="tc-gone-1", tool_name="bash", args={}),
+    )
+
+    endpoints = {item.get("endpoint") for item in manager._load_subscriptions()}
+    assert subscription["endpoint"] not in endpoints
+
+
+@pytest.mark.asyncio
+async def test_push_subscriptions_file_is_restricted_to_owner(
+    push_client: AsyncClient,
+    psk: str,
+    push_home: Path,
+) -> None:
+    _ = push_home
+
+    subscription = {
+        "endpoint": "https://example.com/push/perms",
+        "keys": {"p256dh": "p256dh-key", "auth": "auth-key"},
+    }
+
+    subscribe = await push_client.post(
+        "/api/push/subscribe",
+        headers={"X-PSK": psk},
+        json=subscription,
+    )
+    assert subscribe.status_code == 200
+
+    path = push_home / ".vibecheck" / "push_subscriptions.json"
+    assert path.exists()
+    assert (path.stat().st_mode & 0o777) == 0o600
 
 
 def test_vapid_keypair_regenerates_when_keys_file_is_corrupt(
