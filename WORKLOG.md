@@ -30,6 +30,15 @@
 - Bridge now suppresses raw `AssistantEvent`/`UserMessageEvent` yields when message observer is available, keeping middleware STOP messages intact (`vibecheck/bridge.py`).
 - Tests: `uv run pytest vibecheck/tests/ -v` → **120 passed**
 
+### TUI stability: mobile-first message context crash
+- Fixed `LookupError: active_app` crash in Textual markdown rendering when the first prompt comes from mobile (REST) instead of TUI.
+- Root cause: `SessionBridge` message worker task captured the context of whichever surface sent the first message; mobile-first created the worker outside Textual context, so raw event-driven UI mounts failed.
+- Added `SessionBridge.prime_message_worker()` and now call it during `VibeCheckApp.on_mount()` so the worker is created in Textual context before mobile traffic (`vibecheck/bridge.py`, `vibecheck/launcher.py`).
+- Added launcher regression test for worker priming (`vibecheck/tests/test_launcher.py`).
+- Verification:
+  - `uv run pytest vibecheck/tests/test_launcher.py vibecheck/tests/test_bridge.py vibecheck/tests/test_tui_bridge.py -v` -> pass.
+  - `uv run pytest vibecheck/tests/ -v` -> **121 passed**.
+
 ### Repository setup
 - Created `vibecheck` repo
 - Created README.md (full product brief)

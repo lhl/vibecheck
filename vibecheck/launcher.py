@@ -282,6 +282,7 @@ class VibeCheckApp(_BaseVibeApp):
 
         self._bind_bridge_callbacks()
         self._install_callback_interceptors()
+        self._bridge.prime_message_worker()
 
         if getattr(self, "event_handler", None) is not None:
             self._tui_bridge = TuiBridge(

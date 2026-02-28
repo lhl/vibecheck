@@ -866,6 +866,14 @@ class SessionBridge:
         self._message_worker_task = task
         self._track_task(task)
 
+    def prime_message_worker(self) -> None:
+        """Start the message worker in the current task context if possible."""
+        try:
+            self._ensure_message_worker()
+        except RuntimeError:
+            # Safe no-op when called without an active event loop.
+            return
+
     async def start_session(self, message: str, working_dir: Path | None = None) -> None:
         _ = working_dir
         self._ensure_agent_loop()
