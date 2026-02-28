@@ -636,3 +636,16 @@
 - Verification:
   - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
   - `cd vibecheck/frontend && npm test && npm run build` -> pass.
+
+### Phase 6 hardening follow-ups (Push cleanup + voice validation + max recording + translate blank guard)
+- Push:
+  - Prune subscriptions on 404/410 send failures and restrict `push_subscriptions.json` perms to `0600` (`vibecheck/push.py`, `vibecheck/tests/test_push.py`).
+- Voice:
+  - Validate `language` query param (ja/en only), reject non-audio MIME types, and read raw bodies in a size-bounded stream (`vibecheck/routes/voice.py`, `vibecheck/tests/test_voice.py`).
+- Mic:
+  - Auto-stop long recordings (default 60s) and still upload on release even if the recorder already stopped (`vibecheck/frontend/src/lib/recorder.js`, `vibecheck/frontend/src/components/MicButton.svelte`, `vibecheck/frontend/src/lib/recorder.test.js`).
+- Translation:
+  - Reject whitespace-only `text` payloads before calling upstream (`vibecheck/routes/translate.py`, `vibecheck/tests/test_translate.py`).
+- Verification:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
+  - `cd vibecheck/frontend && npm test && npm run build` -> pass.
