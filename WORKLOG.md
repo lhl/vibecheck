@@ -616,3 +616,10 @@
 - Verification:
   - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
   - `cd vibecheck/frontend && npm test && npm run build` -> pass.
+
+### Phase 6B review fixes (Push unsubscribe ordering)
+- Fixed push unsubscribe ordering so backend unsubscribe happens before local `subscription.unsubscribe()` (prevents server/client drift on backend failure) (`vibecheck/frontend/src/lib/push.js`).
+- Added regression coverage for ordering + backend failure behavior (`vibecheck/frontend/src/lib/push.test.js`).
+- Verification:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
+  - `cd vibecheck/frontend && npm test && npm run build` -> pass.
