@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import mimetypes
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -7,8 +8,7 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse, Response
 
 from vibecheck.auth import PSKAuthMiddleware, load_psk
 from vibecheck.routes.api import router as api_router
@@ -30,10 +30,18 @@ def resolve_static_dir() -> Path:
     return Path(__file__).resolve().parent / "static"
 
 
-def static_file(path: Path) -> FileResponse:
+def static_file(path: Path) -> Response:
     if not path.exists():
         raise HTTPException(status_code=404, detail="Not Found")
-    return FileResponse(path)
+    media_type, _encoding = mimetypes.guess_type(str(path))
+    return Response(content=path.read_bytes(), media_type=media_type or "application/octet-stream")
+
+
+def _safe_join(root: Path, fragment: str) -> Path:
+    candidate = (root / fragment).resolve()
+    if not candidate.is_relative_to(root):
+        raise HTTPException(status_code=404, detail="Not Found")
+    return candidate
 
 
 def create_app() -> FastAPI:
@@ -53,22 +61,32 @@ def create_app() -> FastAPI:
     app.include_router(ws_router)
 
     static_dir = resolve_static_dir()
-    if static_dir.exists():
-        app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
     assets_dir = static_dir / "assets"
-    if assets_dir.exists():
-        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
-
     icons_dir = static_dir / "icons"
-    if icons_dir.exists():
-        app.mount("/icons", StaticFiles(directory=icons_dir), name="icons")
+
+    @app.get("/assets/{asset_path:path}", include_in_schema=False)
+    async def assets(asset_path: str):
+        if not assets_dir.exists():
+            raise HTTPException(status_code=404, detail="Not Found")
+        return static_file(_safe_join(assets_dir, asset_path))
+
+    @app.get("/icons/{icon_path:path}", include_in_schema=False)
+    async def icons(icon_path: str):
+        if not icons_dir.exists():
+            raise HTTPException(status_code=404, detail="Not Found")
+        return static_file(_safe_join(icons_dir, icon_path))
+
+    @app.get("/static/{static_path:path}", include_in_schema=False)
+    async def static_files(static_path: str):
+        if not static_dir.exists():
+            raise HTTPException(status_code=404, detail="Not Found")
+        return static_file(_safe_join(static_dir, static_path))
 
     @app.get("/", include_in_schema=False)
     async def root():
         index_file = static_dir / "index.html"
         if index_file.exists():
-            return FileResponse(index_file)
+            return static_file(index_file)
         return JSONResponse({"name": "vibecheck", "status": "ok"})
 
     @app.get("/manifest.json", include_in_schema=False)

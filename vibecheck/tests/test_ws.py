@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Generator
 
 import pytest
-from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from vibecheck.app import create_app
+from vibecheck.tests.asgi_ws import websocket_session
 from vibecheck.events import AssistantEvent
 from vibecheck import ws as ws_module
 
@@ -21,7 +20,7 @@ class DummyWebSocket:
 
 
 @pytest.fixture
-def ws_client(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
+def ws_app(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("VIBECHECK_PSK", "dev-psk")
     ws_module.manager._expected_psk = "dev-psk"
     ws_module.manager.rooms.clear()
@@ -29,30 +28,30 @@ def ws_client(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, No
     ws_module.session_manager.sessions.clear()
 
     app = create_app()
-    client = TestClient(app)
     try:
-        yield client
+        yield app
     finally:
-        client.close()
         ws_module.manager.rooms.clear()
         ws_module.manager.socket_to_session.clear()
         ws_module.session_manager.sessions.clear()
 
 
-def test_ws_rejects_invalid_psk(ws_client: TestClient) -> None:
+@pytest.mark.asyncio
+async def test_ws_rejects_invalid_psk(ws_app) -> None:
     with pytest.raises(WebSocketDisconnect) as exc:
-        with ws_client.websocket_connect("/ws/events/session-1?psk=bad"):
+        async with websocket_session(ws_app, "/ws/events/session-1?psk=bad"):
             pass
 
     assert exc.value.code == 4401
 
 
-def test_ws_connects_with_valid_psk_and_sends_connected_event(ws_client: TestClient) -> None:
+@pytest.mark.asyncio
+async def test_ws_connects_with_valid_psk_and_sends_connected_event(ws_app) -> None:
     ws_module.session_manager.attach("session-2")
 
-    with ws_client.websocket_connect("/ws/events/session-2?psk=dev-psk") as websocket:
-        connected = websocket.receive_json()
-        state = websocket.receive_json()
+    async with websocket_session(ws_app, "/ws/events/session-2?psk=dev-psk") as websocket:
+        connected = await websocket.receive_json()
+        state = await websocket.receive_json()
 
     assert connected["type"] == "connected"
     assert connected["session_id"] == "session-2"
@@ -98,14 +97,15 @@ def test_disconnect_removes_client_from_room(monkeypatch: pytest.MonkeyPatch) ->
     assert manager.socket_to_session == {}
 
 
-def test_backlog_is_delivered_on_connect(ws_client: TestClient) -> None:
+@pytest.mark.asyncio
+async def test_backlog_is_delivered_on_connect(ws_app) -> None:
     bridge = ws_module.session_manager.attach("session-backlog")
     bridge.add_event(AssistantEvent(content="from backlog"))
 
-    with ws_client.websocket_connect("/ws/events/session-backlog?psk=dev-psk") as websocket:
-        connected = websocket.receive_json()
-        state = websocket.receive_json()
-        backlog_event = websocket.receive_json()
+    async with websocket_session(ws_app, "/ws/events/session-backlog?psk=dev-psk") as websocket:
+        connected = await websocket.receive_json()
+        state = await websocket.receive_json()
+        backlog_event = await websocket.receive_json()
 
     assert connected["type"] == "connected"
     assert connected["session_id"] == "session-backlog"
@@ -114,30 +114,32 @@ def test_backlog_is_delivered_on_connect(ws_client: TestClient) -> None:
     assert backlog_event["content"] == "from backlog"
 
 
-def test_ws_rejects_unknown_session_and_does_not_attach(ws_client: TestClient) -> None:
-    with ws_client.websocket_connect("/ws/events/ghost-session?psk=dev-psk") as websocket:
+@pytest.mark.asyncio
+async def test_ws_rejects_unknown_session_and_does_not_attach(ws_app) -> None:
+    async with websocket_session(ws_app, "/ws/events/ghost-session?psk=dev-psk") as websocket:
         with pytest.raises(WebSocketDisconnect) as exc:
-            websocket.receive_json()
+            await websocket.receive_json()
 
     assert exc.value.code == 4404
     assert "ghost-session" not in ws_module.session_manager.sessions
 
 
-def test_two_sessions_get_independent_backlogs(ws_client: TestClient) -> None:
+@pytest.mark.asyncio
+async def test_two_sessions_get_independent_backlogs(ws_app) -> None:
     session_a = ws_module.session_manager.attach("session-a")
     session_b = ws_module.session_manager.attach("session-b")
     session_a.add_event(AssistantEvent(content="only-a"))
     session_b.add_event(AssistantEvent(content="only-b"))
 
-    with ws_client.websocket_connect("/ws/events/session-a?psk=dev-psk") as websocket_a:
-        websocket_a.receive_json()  # connected
-        websocket_a.receive_json()  # state
-        backlog_a = websocket_a.receive_json()
+    async with websocket_session(ws_app, "/ws/events/session-a?psk=dev-psk") as websocket_a:
+        await websocket_a.receive_json()  # connected
+        await websocket_a.receive_json()  # state
+        backlog_a = await websocket_a.receive_json()
 
-    with ws_client.websocket_connect("/ws/events/session-b?psk=dev-psk") as websocket_b:
-        websocket_b.receive_json()  # connected
-        websocket_b.receive_json()  # state
-        backlog_b = websocket_b.receive_json()
+    async with websocket_session(ws_app, "/ws/events/session-b?psk=dev-psk") as websocket_b:
+        await websocket_b.receive_json()  # connected
+        await websocket_b.receive_json()  # state
+        backlog_b = await websocket_b.receive_json()
 
     assert backlog_a["content"] == "only-a"
     assert backlog_b["content"] == "only-b"

@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
-from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from pydantic import BaseModel
 import pytest
-import time
+import pytest_asyncio
 
 from vibecheck.app import create_app
 from vibecheck.bridge import SessionManager, VibeRuntime
+from vibecheck.tests.asgi_ws import websocket_session
 
 
 class FakeVibeConfig:
@@ -81,11 +83,11 @@ class FakeLiveAgentLoop:
         yield FakeAssistantEvent(content="done", message_id="a-1")
 
 
-@pytest.fixture
-def live_client(
+@pytest_asyncio.fixture
+async def live_client(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
-) -> tuple[TestClient, SessionManager]:
+) -> tuple[AsyncClient, SessionManager, object]:
     monkeypatch.setenv("VIBECHECK_PSK", "dev-psk")
 
     manager = SessionManager(logs_root=tmp_path / "logs")
@@ -115,55 +117,59 @@ def live_client(
     manager.set_connection_manager(ws_module.manager)
 
     app = create_app()
-    client = TestClient(app)
+    transport = ASGITransport(app=app)
+    client = AsyncClient(transport=transport, base_url="http://testserver")
     try:
-        yield client, manager
+        yield client, manager, app
     finally:
-        client.close()
+        await client.aclose()
         ws_module.manager.rooms.clear()
         ws_module.manager.socket_to_session.clear()
         manager.sessions.clear()
 
 
-def _read_until(websocket, predicate, *, max_messages: int = 20) -> list[dict]:
+async def _read_until(websocket, predicate, *, max_messages: int = 20) -> list[dict]:
     seen: list[dict] = []
     for _ in range(max_messages):
-        payload = websocket.receive_json()
+        payload = await websocket.receive_json()
         seen.append(payload)
         if predicate(seen):
             return seen
     raise AssertionError("expected websocket messages were not observed")
 
 
-def _wait_until(predicate, *, timeout_seconds: float = 2.0) -> None:
-    deadline = time.time() + timeout_seconds
-    while time.time() < deadline:
-        if predicate():
+async def _wait_until(predicate, *, timeout_seconds: float = 2.0) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout_seconds
+    while asyncio.get_running_loop().time() < deadline:
+        if await predicate():
             return
-        time.sleep(0.01)
+        await asyncio.sleep(0.01)
     raise AssertionError("condition was not met before timeout")
 
 
-def test_live_attach_flow_with_rest_and_websocket(live_client) -> None:
-    client, _manager = live_client
+@pytest.mark.asyncio
+async def test_live_attach_flow_with_rest_and_websocket(live_client) -> None:
+    client, _manager, app = live_client
     headers = {"X-PSK": "dev-psk"}
 
-    message_response = client.post(
+    message_response = await client.post(
         "/api/sessions/live-session/message",
         headers=headers,
         json={"content": "trigger tool"},
     )
     assert message_response.status_code == 200
 
-    _wait_until(
-        lambda: "tc-live"
-        in client.get("/api/sessions/live-session", headers=headers).json()["pending_approval"]
-    )
+    async def approval_is_pending() -> bool:
+        response = await client.get("/api/sessions/live-session", headers=headers)
+        pending = response.json().get("pending_approval", [])
+        return "tc-live" in pending
 
-    with client.websocket_connect("/ws/events/live-session?psk=dev-psk") as websocket:
-        connected = websocket.receive_json()
-        state = websocket.receive_json()
-        backlog = _read_until(
+    await _wait_until(approval_is_pending)
+
+    async with websocket_session(app, "/ws/events/live-session?psk=dev-psk") as websocket:
+        connected = await websocket.receive_json()
+        state = await websocket.receive_json()
+        backlog = await _read_until(
             websocket,
             lambda msgs: any(msg.get("type") == "approval_request" for msg in msgs),
         )
@@ -174,24 +180,23 @@ def test_live_attach_flow_with_rest_and_websocket(live_client) -> None:
     assert any(msg.get("type") == "tool_call" for msg in backlog)
     assert any(msg.get("type") == "approval_request" for msg in backlog)
 
-    detail = client.get("/api/sessions/live-session", headers=headers)
+    detail = await client.get("/api/sessions/live-session", headers=headers)
     assert detail.status_code == 200
     assert detail.json()["attach_mode"] == "live"
     assert detail.json()["controllable"] is True
 
-    approve_response = client.post(
+    approve_response = await client.post(
         "/api/sessions/live-session/approve",
         headers=headers,
         json={"call_id": "tc-live", "approved": True},
     )
     assert approve_response.status_code == 200
 
-    _wait_until(
-        lambda: (
-            client.get("/api/sessions/live-session", headers=headers).json()["pending_approval"] == []
-            and any(
-                event.get("type") == "approval_resolution"
-                for event in client.get("/api/sessions/live-session", headers=headers).json()["backlog"]
-            )
+    async def approval_is_resolved() -> bool:
+        response = await client.get("/api/sessions/live-session", headers=headers)
+        payload = response.json()
+        return payload.get("pending_approval", []) == [] and any(
+            event.get("type") == "approval_resolution" for event in payload.get("backlog", [])
         )
-    )
+
+    await _wait_until(approval_is_resolved)
