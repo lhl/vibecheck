@@ -568,6 +568,11 @@
   - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
   - `cd vibecheck/frontend && npm test && npm run build` -> pass.
 
+### Phase 6 docs reconciliation
+- Updated Phase 6 review tracker with post-fix status + commit map (`docs/REVIEW-phase6.md`).
+- Synced push reference doc with current SW/app action handling (no PSK in SW; action forwarded to app) and updated the “what we push” table (`docs/REFERENCE-push-notifications.md`).
+- Refreshed project TODO list for current Phase 6 follow-ups (`docs/TODO.md`).
+
 ### Phase 6 review fixes (Reviewer 3 follow-ups)
 - Voice:
   - Added max payload guard (`VIBECHECK_MAX_AUDIO_BYTES`, default 10MB) for both raw and multipart uploads (`vibecheck/routes/voice.py`).

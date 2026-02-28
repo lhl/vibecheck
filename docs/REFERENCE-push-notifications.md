@@ -57,6 +57,12 @@ For vibecheck, keys are generated on first run and stored in `~/.vibecheck/vapid
 
 The public key is served at `GET /api/push/vapid-key` so the frontend can fetch it.
 
+Implementation notes (vibecheck):
+- Storage dir: `~/.vibecheck/`
+  - `vapid_keys.json` and `push_subscriptions.json` are written with best-effort `chmod 0600`.
+- VAPID contact `sub` claim is configurable via `VIBECHECK_VAPID_SUB` (defaults to `mailto:vibecheck@localhost`).
+- Dead subscriptions are pruned automatically when the push service returns `404/410`.
+
 ### Step 1: Browser subscribes
 
 ```
@@ -149,24 +155,26 @@ except WebPushException as e:
 ```javascript
 // sw.js
 self.addEventListener('push', (event) => {
-  const data = event.data?.json() ?? {}
-
-  const options = {
-    body: data.body || 'Vibe needs your attention',
-    icon: '/icons/vibe-192.png',
-    badge: '/icons/vibe-192.png',
-    tag: data.tool_call_id || 'vibecheck',      // replaces previous notification with same tag
-    requireInteraction: true,                     // stays until user acts (approval/input)
-    data: data,                                   // passed to notificationclick handler
-    actions: [
-      { action: 'approve', title: 'Approve' },
-      { action: 'deny', title: 'Deny' },
-    ],
+  let payload = {}
+  try {
+    payload = event.data ? event.data.json() : {}
+  } catch {
+    payload = {}
   }
 
-  event.waitUntil(
-    self.registration.showNotification(data.title || 'vibecheck', options)
-  )
+  const title = typeof payload.title === 'string' && payload.title.trim() ? payload.title : 'vibecheck'
+  const options = {
+    body: typeof payload.body === 'string' ? payload.body : '',
+    tag: typeof payload.tag === 'string' ? payload.tag : undefined,
+    requireInteraction: Boolean(payload.requireInteraction),
+    data: {
+      url: typeof payload.url === 'string' ? payload.url : '/',
+      action: null,
+    },
+    actions: Array.isArray(payload.actions) ? payload.actions : [],
+  }
+
+  event.waitUntil(self.registration.showNotification(title, options))
 })
 ```
 
@@ -175,39 +183,29 @@ self.addEventListener('push', (event) => {
 ```javascript
 // sw.js
 self.addEventListener('notificationclick', (event) => {
-  const data = event.notification.data
   event.notification.close()
+  const action = event.action || ''
+  const url = event.notification?.data?.url || '/'
 
-  if (event.action === 'approve' || event.action === 'deny') {
-    // Quick-action: approve/deny without opening the app
-    event.waitUntil(
-      fetch(`/api/sessions/${data.session_id}/approve`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-PSK': self.__psk,  // stored during subscribe
-        },
-        body: JSON.stringify({
-          tool_call_id: data.tool_call_id,
-          approved: event.action === 'approve',
-        }),
-      })
-    )
-  } else {
-    // Default tap: open the app
-    event.waitUntil(
-      clients.matchAll({ type: 'window' }).then((windowClients) => {
-        for (const client of windowClients) {
-          if (client.url.includes('/') && 'focus' in client) {
-            return client.focus()
-          }
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if (client.url && client.url.includes(url)) {
+          client.postMessage({ type: 'notification_action', action, url })
+          return client.focus()
         }
-        return clients.openWindow('/')
-      })
-    )
-  }
+      }
+
+      const decorated = action ? `${url}${url.includes('?') ? '&' : '?'}action=${encodeURIComponent(action)}` : url
+      return self.clients.openWindow(decorated)
+    }),
+  )
 })
 ```
+
+In vibecheck, the service worker **does not store PSKs or call protected APIs directly**. Instead, it forwards the click/action to the
+running app via `postMessage`, or opens the app with `?action=approve|deny`. The app then performs the REST approval call using the
+user's stored PSK.
 
 ---
 
@@ -232,12 +230,10 @@ Defined in WU-19 and WU-22 (smart notifications with Ministral):
 
 | Trigger | Priority | `requireInteraction` | Intensity threshold |
 |---------|----------|---------------------|-------------------|
-| `waiting_approval` — tool call needs approval | High | `true` | Vibing (level 2+) |
-| `waiting_input` — agent has a question | High | `true` | Vibing (level 2+) |
-| `error` — agent crashed | Normal | `false` | Chill (level 1+) |
-| `task_complete` — task finished | Low | `false` | Dialed In (level 3+) |
-| `idle` — agent idle | Low | `false` | Dialed In (level 3+) |
-| `progress` — progress update | Low | `false` | Locked In (level 4+) |
+| `waiting_approval` — tool call needs approval | High | `true` | Always |
+| `waiting_input` — agent has a question | High | `true` | Always |
+| `error` — tool result error | Normal | `false` | Always |
+| `idle` — waiting too long for you (escalation) | Low | `false` | Level 3+ (no UI/API yet) |
 
 Approval and input pushes are **never suppressed by snooze** — they're agent-blocking.
 

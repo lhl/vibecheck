@@ -1,4 +1,4 @@
-# Phase 6 Review (Reviewer 3)
+# Phase 6 Review (Reviewer 3) — Resolutions
 
 Date: 2026-02-28
 
@@ -8,6 +8,59 @@ Scope:
 - Phase 6D — Translation (WU-21): `POST /api/translate`; FE per-message 🌐 toggle + cache + CJK-skip + global auto-translate
 - Phase 6C — Smart notifications (WU-22): `IntensityManager` + Ministral copy/urgency helpers
 - Watch item: emit `user_message` immediately on `inject_message()` w/ dedupe vs Vibe echoes
+
+This file captures the initial Phase 6 review notes and tracks the follow-up fixes that landed after review.
+
+## Status (post-follow-up fixes)
+
+Verification (current):
+- Backend: `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` → **113 passed**
+- Frontend: `cd vibecheck/frontend && npm test && npm run build` → **59 passed**, build **OK**
+
+### Fix status
+
+#### Voice (6A)
+
+- ✅ Request-size guard + streaming reads + audio content-type validation: `87cf90b`, `99b623f`
+- ✅ Language allowlist (`ja`/`en`) enforced server-side: `99b623f`
+- ✅ Mic press/release race fix (no stuck recordings on quick release): `e2904c1`
+- ✅ Handle `touchcancel` to avoid stuck recording state: `d4ad387`
+- ✅ Recorder error clears active state (no permanent lockout after `recorder.onerror`): `faecd36`
+- ✅ Max recording duration (defaults to 60s): `9ab249a`
+
+#### Push + smart notifications (6B/6C)
+
+- ✅ Approve/Deny notification actions wired end-to-end (SW → app → REST approve): `7ac7f63`
+- ✅ VAPID key file corruption guard + restrictive permissions + configurable `sub` claim (`VIBECHECK_VAPID_SUB`): `e6bd9c4`
+- ✅ Dead subscription cleanup on `404/410`: `e6bd9c4`
+- ✅ Unsubscribe ordering fixed (backend first, then local unsubscribe): `ae72a8d`
+- ✅ Subscribe reuses existing subscription (avoids `InvalidStateError`): `9bb919a`
+- ✅ Idle escalation worker wired (requires intensity `level >= 3`; no UI/API yet): `f07df48`
+
+#### Translation (6D)
+
+- ✅ `target_lang` strip-before-validate + lang-code pattern + max request size: `22dbd29`
+- ✅ Reject whitespace-only translate text: `0079363`
+- ✅ Cap translation cache size (200): `9b6589c`
+- ✅ Expanded backend test coverage for auth/error paths: `7f44290`, `7e4c98a`
+
+#### Watch item (user bubbles)
+
+- ✅ Immediate local `user_message` emit on `inject_message()`: `a029587`
+- ✅ Dedupe narrowed to the active injected message + shorter window (10s): `e2904c1`
+
+### Remaining (non-blocking)
+
+- Rate limiting / usage caps on `/api/voice/transcribe`, `/api/translate`, `/api/push/*`.
+- Decide PSK-in-query-param policy for REST (WS currently uses query param; REST middleware still accepts it).
+- No user-facing API/UI to configure push intensity level or snooze.
+- Translation FE error UX doesn’t parse JSON `{detail}` (uses `status/statusText` only).
+
+---
+
+## Initial review snapshot
+
+Note: the sections below are preserved from the initial review; the follow-ups are now resolved (see “Fix status” above) and some file/behavior notes may be stale.
 
 Commits reviewed:
 - Voice: `0887272`
@@ -59,4 +112,3 @@ Commits reviewed:
 ## Coverage nudge (low effort)
 
 - Add `/api/push/*`, `/api/translate`, and `/api/voice/transcribe` to the “PSK required” parametrized test so auth regressions are harder to introduce. See `vibecheck/tests/test_api.py`.
-
