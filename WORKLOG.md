@@ -15,6 +15,7 @@
 
 ### Docs: running instructions
 - Updated `README.md` to add a **Running** section + refresh Quick Start (PSK requirement, `uv run vibecheck-vibe`, state-check curl commands).
+- Tweaked server-only instructions to build the frontend in a subshell so the subsequent `uv run python -m vibecheck` runs from the repo root.
 - Updated `docs/DEMO.md` to reference `vibecheck-vibe` (instead of `vibe`) and clarify the EC2 “server running” check.
 - Updated `docs/PLAN.md` to mark Layer 1 + 1.5 bridge items as complete (`[x]`).
 

@@ -31,7 +31,7 @@ export MISTRAL_API_KEY=YOUR_KEY
 uv run vibecheck-vibe --ws-port 7870
 
 # Alternative: server-only bridge (serves built PWA from `vibecheck/static/`)
-cd vibecheck/frontend && npm run build
+(cd vibecheck/frontend && npm run build)
 uv run python -m vibecheck
 ```
 
@@ -53,7 +53,7 @@ uv run vibecheck-vibe --ws-port 7870
 ### Server-only (no Vibe TUI)
 
 ```bash
-cd vibecheck/frontend && npm run build
+(cd vibecheck/frontend && npm run build)
 uv run python -m vibecheck
 ```
 
