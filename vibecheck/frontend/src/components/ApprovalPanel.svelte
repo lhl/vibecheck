@@ -31,7 +31,18 @@
       })
 
       if (!response.ok) {
-        throw new Error(`${response.status} ${response.statusText}`)
+        let detail = ''
+        try {
+          const errBody = await response.json()
+          detail = typeof errBody?.detail === 'string' ? errBody.detail : ''
+        } catch {
+          // no-op
+        }
+        throw new Error(
+          detail
+            ? `${response.status} ${detail}`
+            : `${response.status} ${response.statusText}`.trim(),
+        )
       }
 
       if (typeof onResolved === 'function') {

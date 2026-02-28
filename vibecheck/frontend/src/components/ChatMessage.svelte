@@ -59,7 +59,18 @@
     })
 
     if (!response.ok) {
-      throw new Error(`${response.status} ${response.statusText}`.trim())
+      let detail = ''
+      try {
+        const errBody = await response.json()
+        detail = typeof errBody?.detail === 'string' ? errBody.detail : ''
+      } catch {
+        // no-op
+      }
+      throw new Error(
+        detail
+          ? `${response.status} ${detail}`
+          : `${response.status} ${response.statusText}`.trim(),
+      )
     }
 
     const payload = await response.json()
