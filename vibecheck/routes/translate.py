@@ -47,6 +47,13 @@ class TranslateRequest(BaseModel):
             return value.strip()
         return value
 
+    @field_validator("text")
+    @classmethod
+    def _reject_blank_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("text must not be blank")
+        return value
+
     @field_validator("source_lang", mode="before")
     @classmethod
     def _strip_source_lang(cls, value: object) -> object:
