@@ -33,12 +33,13 @@ class TuiBridge:
             self._local_user_message_marks.maxlen is not None
             and len(self._local_user_message_marks) >= self._local_user_message_marks.maxlen
         ):
+            # `deque(maxlen=...)` auto-drops the oldest entry on overflow; we log for observability.
             logger.debug("Local user message mark queue overflow; dropping oldest entry")
 
         self._local_user_message_marks.append(content)
 
     def _raw_user_message_content(self, event: object) -> str | None:
-        if type(event).__name__ != "UserMessageEvent":
+        if not type(event).__name__.endswith("UserMessageEvent"):
             return None
         if not hasattr(event, "message_id"):
             return None

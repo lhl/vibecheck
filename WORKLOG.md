@@ -738,6 +738,7 @@
 
 - Added a `TuiBridge` mount callback + FIFO one-shot dedupe so raw `UserMessageEvent` mounts a `UserMessage` widget in the Textual TUI when the prompt originated from phone (and skips duplicates for local prompts).
 - `VibeCheckApp` now passes `mount_user_message` to `TuiBridge` and marks locally-submitted rendered prompts only after `bridge.inject_message()` succeeds.
+- Follow-up: relaxed raw event detection to `*.endswith("UserMessageEvent")` (still guarded by `message_id`) and clarified deque overflow logging intent.
 - Updated docs: removed the Gap 2 known limitation from `README.md`; manual test scenario `S6_GAP2_VISIBILITY` is now a strict pass.
 - Verification:
   - `uv run pytest vibecheck/tests/test_tui_bridge.py vibecheck/tests/test_launcher.py -v` -> pass.
