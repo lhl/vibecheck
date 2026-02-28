@@ -239,6 +239,14 @@ See `docs/ANALYSIS-session-attachment.md` § "Phase 3 Validation: Confirmed Gaps
 
 > *Demo: "Full polished mobile experience — themes, diffs, session details"*
 
+- [ ] **Session picker redesign** (replaces raw UUID dropdown):
+  - Active = `controllable == true` (TUI attached/live); observe-only bridges don't count
+  - Active sessions shown by default, sorted reverse-chron by `started_at`
+  - Each entry: title (first 50 chars of initial prompt from Vibe meta.json; "New session" if empty), relative age, message count
+  - Attention icon on `waiting_approval`/`waiting_input` sessions
+  - Latest active session auto-selected on launch
+  - "Browse older sessions" expando for non-active sessions
+  - Future: editable titles, LLM-generated summaries (not in scope now)
 - [ ] Session detail view (event backlog, file changes, token usage)
 - [ ] Session resume/continue from mobile (reattach bridge to a past session)
 - [ ] Tool call diff viewer (for write_file/search_replace — show before/after)
