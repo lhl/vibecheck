@@ -1,6 +1,10 @@
-# vibecheck — Frontend Worklog
+# vibecheck — Frontend Worklog (Audio)
 
 ## 2026-02-28
+
+### Frontend prototype ngrok host allowlist (mobile testing)
+- Updated `frontend-prototype/frontend/vite.config.js` to allow Vite host `hilario-femoral-verda.ngrok-free.dev` via `server.allowedHosts`.
+- Purpose: enable phone access through ngrok forwarding to local dev server on `localhost:5178`.
 
 ### Phase 0 punchlist reset (frontend portions)
 - Updated WU-02 mobile acceptance note to target 360px–428px phone widths and retained explicit frontend build gate
@@ -18,7 +22,7 @@
   - Frontend dev probe: `npm run dev` served on `:5173` and responded to `curl`.
 
 ### Frontend prototype planning
-- Added `docs/FRONTEND-PROTOTYPE-IMPLEMENTATION.md` with milestone-based punchlist for the Voxtral STT + ElevenLabs TTS voice loop prototype
+- Added `docs/FRONTEND-PROTOTYPE-IMPLEMENTATION-AUDIO.md` with milestone-based punchlist for the Voxtral STT + ElevenLabs TTS voice loop prototype
 
 ### Frontend prototype reviewer corrections
 - Updated `frontend-prototype/server/server/app.py` to stream `/api/tts` responses back to clients instead of buffering full audio in memory.
@@ -119,7 +123,7 @@
   - `cd frontend-prototype/frontend && npm run test:e2e` -> 2 passed.
 
 ### Frontend prototype milestone 3 kickoff (STT integration verification)
-- Read `docs/PLAN.md`, `docs/IMPLEMENTATION.md`, `docs/FRONTEND-PROTOTYPE-PLAN.md`, and `docs/FRONTEND-PROTOTYPE-IMPLEMENTATION.md` to align milestone scope before changes.
+- Read `docs/PLAN.md`, `docs/IMPLEMENTATION.md`, `docs/FRONTEND-PROTOTYPE-PLAN-AUDIO.md`, and `docs/FRONTEND-PROTOTYPE-IMPLEMENTATION-AUDIO.md` to align milestone scope before changes.
 - Added Milestone 3-focused frontend tests in `frontend-prototype/frontend/src/App.test.js`:
   - record -> stop -> `/api/stt` upload -> transcript render
   - microphone permission denied path with actionable UI error
@@ -148,7 +152,7 @@
   - `cd frontend-prototype/frontend && npm run test:e2e` -> 2 passed.
 
 ### Frontend prototype milestone 4 kickoff (TTS integration + playback)
-- Read `docs/PLAN.md`, `docs/IMPLEMENTATION.md`, `docs/FRONTEND-PROTOTYPE-PLAN.md`, and `docs/FRONTEND-PROTOTYPE-IMPLEMENTATION.md` to align Milestone 4 scope and exit criteria.
+- Read `docs/PLAN.md`, `docs/IMPLEMENTATION.md`, `docs/FRONTEND-PROTOTYPE-PLAN-AUDIO.md`, and `docs/FRONTEND-PROTOTYPE-IMPLEMENTATION-AUDIO.md` to align Milestone 4 scope and exit criteria.
 - Added Milestone 4 frontend tests first in `frontend-prototype/frontend/src/App.test.js`:
   - selected voice ID is sent in `/api/tts` payload
   - speaking state includes explicit playback status messaging during active audio playback
@@ -200,7 +204,7 @@
   - Startup smoke: `uv run uvicorn server.app:app --host 127.0.0.1 --port 8780` + `curl http://127.0.0.1:8780/health` -> `{"status":"ok"}`.
 
 ### Frontend prototype milestone 5 kickoff (hardening + mobile QA)
-- Read `docs/PLAN.md`, `docs/IMPLEMENTATION.md`, `docs/FRONTEND-PROTOTYPE-PLAN.md`, and `docs/FRONTEND-PROTOTYPE-IMPLEMENTATION.md` to align Milestone 5 scope and exit criteria.
+- Read `docs/PLAN.md`, `docs/IMPLEMENTATION.md`, `docs/FRONTEND-PROTOTYPE-PLAN-AUDIO.md`, and `docs/FRONTEND-PROTOTYPE-IMPLEMENTATION-AUDIO.md` to align Milestone 5 scope and exit criteria.
 - Added Milestone 5 frontend tests first in `frontend-prototype/frontend/src/App.test.js`:
   - clears stale transcript state when starting a new recording after a completed prior run
   - disables non-essential controls (preview buttons) while transcription requests are in flight

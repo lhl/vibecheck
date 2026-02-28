@@ -1,4 +1,4 @@
-# Frontend Prototype Plan
+# Frontend Prototype Plan (Audio)
 
 ## Goal
 

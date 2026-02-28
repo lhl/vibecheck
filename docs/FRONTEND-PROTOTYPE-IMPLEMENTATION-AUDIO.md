@@ -1,4 +1,4 @@
-# Frontend Prototype Implementation Punchlist
+# Frontend Prototype Implementation Punchlist (Audio)
 
 ## Purpose
 
@@ -93,7 +93,7 @@ Exit criteria:
 
 Exit criteria:
 - End-to-end flow works reliably on phones
-- Acceptance criteria in `docs/FRONTEND-PROTOTYPE-PLAN.md` are satisfied
+- Acceptance criteria in `docs/FRONTEND-PROTOTYPE-PLAN-AUDIO.md` are satisfied
 
 ## Verification Checklist
 
@@ -103,4 +103,4 @@ Exit criteria:
 
 ## Worklog
 
-- Update `WORKLOG.md` with major actions and decisions for this prototype.
+- Update `docs/FRONTEND-WORKLOG-AUDIO.md` and `WORKLOG.md` with major actions and decisions for this prototype.

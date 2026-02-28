@@ -266,6 +266,95 @@ button:disabled {
   background: #fee2e2;
 }
 
+.vision {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.hidden-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.vision-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.action-describe {
+  background: #0f766e;
+  color: #f0fdfa;
+}
+
+.vision-state-pill {
+  text-transform: uppercase;
+}
+
+.vision-state-pill.vision-state-idle {
+  background: rgba(226, 232, 240, 0.7);
+  border-color: rgba(71, 85, 105, 0.25);
+  color: #334155;
+}
+
+.vision-state-pill.vision-state-image_selected {
+  background: rgba(219, 234, 254, 0.95);
+  border-color: rgba(30, 64, 175, 0.3);
+  color: #1d4ed8;
+}
+
+.vision-state-pill.vision-state-describing {
+  background: rgba(204, 251, 241, 0.95);
+  border-color: rgba(13, 148, 136, 0.35);
+  color: #0f766e;
+}
+
+.vision-state-pill.vision-state-described {
+  background: rgba(220, 252, 231, 0.95);
+  border-color: rgba(22, 101, 52, 0.3);
+  color: #166534;
+}
+
+.vision-state-pill.vision-state-error {
+  background: rgba(254, 226, 226, 1);
+  border-color: rgba(127, 29, 29, 0.35);
+  color: #7f1d1d;
+}
+
+.vision-error {
+  color: #7f1d1d;
+  margin-top: -0.2rem;
+}
+
+.vision-preview {
+  border: 1px dashed rgba(15, 23, 42, 0.2);
+  border-radius: 12px;
+  padding: 0.65rem;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.vision-preview img {
+  width: 100%;
+  max-height: 260px;
+  object-fit: contain;
+  border-radius: 10px;
+  display: block;
+}
+
+.vision-file-name {
+  margin-top: 0.55rem;
+  color: #334155;
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+.vision-description {
+  min-height: 110px;
+}
+
 .transcript {
   min-height: 120px;
 }
@@ -303,5 +392,9 @@ button:disabled {
 
   .preview-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .vision-actions {
+    grid-template-columns: repeat(2, minmax(0, 220px));
   }
 }

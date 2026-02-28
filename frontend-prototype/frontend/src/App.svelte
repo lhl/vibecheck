@@ -31,6 +31,15 @@
     { voice_id: 'j210dv0vWm7fCknyQpbA', name: 'Hinata', language: 'JP' },
     { voice_id: '3JDquces8E8bkmvbh6Bc', name: 'Otani', language: 'JP' },
   ]
+  const VISION_STATE_IDLE = 'idle'
+  const VISION_STATE_IMAGE_SELECTED = 'image_selected'
+  const VISION_STATE_DESCRIBING = 'describing'
+  const VISION_STATE_DESCRIBED = 'described'
+  const VISION_STATE_ERROR = 'error'
+  const VISION_ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+  const VISION_MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+  const VISION_NO_SELECTION_STATUS = 'No image selected'
+  const VISION_NO_SELECTION_GUIDANCE = 'No image selected. Choose Take Photo or Upload Photo.'
 
   let uiState = STATE_IDLE
   let statusMessage = 'Ready'
@@ -52,6 +61,18 @@
   let currentAudioUrl = ''
   let requestInFlight = false
   let micPermissionInFlight = false
+  let visionState = VISION_STATE_IDLE
+  let visionStatusMessage = VISION_NO_SELECTION_STATUS
+  let visionDescription = ''
+  let visionErrorMessage = ''
+  let selectedImageFile = null
+  let selectedImageName = ''
+  let selectedImagePreviewUrl = ''
+  let selectedImagePreviewRevocable = false
+  let takePhotoInputElement = null
+  let uploadPhotoInputElement = null
+  // Tracks visual-flow sequence changes (selection and describe) for stale-result guards.
+  let visionSequenceCounter = 0
 
   const isRecording = () => uiState === STATE_RECORDING
   const isBusy = () => uiState === STATE_TRANSCRIBING || uiState === STATE_SPEAKING
@@ -64,6 +85,7 @@
     return () => {
       stopTracks()
       stopAudio()
+      releaseImagePreview()
     }
   })
 
@@ -88,6 +110,20 @@
       URL.revokeObjectURL(currentAudioUrl)
       currentAudioUrl = ''
     }
+  }
+
+  function releaseImagePreview() {
+    if (selectedImagePreviewUrl && selectedImagePreviewRevocable && typeof URL.revokeObjectURL === 'function') {
+      URL.revokeObjectURL(selectedImagePreviewUrl)
+    }
+    selectedImagePreviewUrl = ''
+    selectedImagePreviewRevocable = false
+  }
+
+  function resetVisionSelection() {
+    selectedImageFile = null
+    selectedImageName = ''
+    releaseImagePreview()
   }
 
   function setError(stage, message) {
@@ -187,6 +223,200 @@
       return voice.name
     }
     return `${voice.name} (${language})`
+  }
+
+  function launchTakePhotoPicker() {
+    if (visionState === VISION_STATE_DESCRIBING) {
+      return
+    }
+    takePhotoInputElement?.click()
+  }
+
+  function launchUploadPhotoPicker() {
+    if (visionState === VISION_STATE_DESCRIBING) {
+      return
+    }
+    uploadPhotoInputElement?.click()
+  }
+
+  function validateImageFile(file) {
+    if (!VISION_ALLOWED_MIME_TYPES.has(file.type)) {
+      return 'Unsupported file type. Use JPEG, PNG, or WEBP.'
+    }
+    if (file.size > VISION_MAX_UPLOAD_BYTES) {
+      return 'Image exceeds 10MB limit.'
+    }
+    return ''
+  }
+
+  async function buildImagePreview(file) {
+    if (typeof URL.createObjectURL === 'function') {
+      return { url: URL.createObjectURL(file), revocable: true }
+    }
+
+    const fileReaderResult = await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result)
+          return
+        }
+        reject(new Error('invalid file preview payload'))
+      }
+      reader.onerror = () => {
+        reject(new Error('file read failed'))
+      }
+      reader.readAsDataURL(file)
+    })
+
+    return { url: fileReaderResult, revocable: false }
+  }
+
+  async function assignSelectedImage(file) {
+    const { url, revocable } = await buildImagePreview(file)
+    releaseImagePreview()
+    selectedImageFile = file
+    selectedImageName = file.name
+    selectedImagePreviewUrl = url
+    selectedImagePreviewRevocable = revocable
+  }
+
+  function setVisionError(message, options = {}) {
+    const guidance = options.allowRetry ? 'Tap Describe to retry.' : 'Choose Take Photo or Upload Photo and try again.'
+    visionState = VISION_STATE_ERROR
+    visionErrorMessage = `${message} ${guidance}`
+    visionStatusMessage = 'Describe image failed'
+    visionDescription = ''
+  }
+
+  async function getVisionFailureDetail(response) {
+    try {
+      const payload = await response.json()
+      if (typeof payload?.detail === 'string' && payload.detail.trim()) {
+        return payload.detail.trim()
+      }
+    } catch {
+      // Fall through to status-derived fallback.
+    }
+    return `Vision request failed with status ${response.status}.`
+  }
+
+  async function handleImageInput(event) {
+    const fileInput = event.currentTarget
+    const imageFile = fileInput?.files?.[0] ?? null
+    if (fileInput) {
+      fileInput.value = ''
+    }
+
+    if (!imageFile) {
+      visionErrorMessage = ''
+      if (!selectedImageFile) {
+        visionState = VISION_STATE_IDLE
+        visionStatusMessage = VISION_NO_SELECTION_GUIDANCE
+        visionDescription = ''
+        return
+      }
+
+      if (visionState === VISION_STATE_ERROR) {
+        visionState = VISION_STATE_IMAGE_SELECTED
+        visionStatusMessage = 'Image selected. Tap Describe.'
+      }
+      return
+    }
+
+    const hadSelectedImage = Boolean(selectedImageFile)
+    visionSequenceCounter += 1
+    visionErrorMessage = ''
+    visionDescription = ''
+
+    const validationError = validateImageFile(imageFile)
+    if (validationError) {
+      if (!hadSelectedImage) {
+        resetVisionSelection()
+      }
+      setVisionError(validationError, { allowRetry: hadSelectedImage })
+      return
+    }
+
+    try {
+      await assignSelectedImage(imageFile)
+    } catch {
+      if (!hadSelectedImage) {
+        resetVisionSelection()
+      }
+      setVisionError('Could not preview image. Try a different photo.', { allowRetry: hadSelectedImage })
+      return
+    }
+
+    visionState = VISION_STATE_IMAGE_SELECTED
+    visionStatusMessage = 'Image selected. Tap Describe.'
+  }
+
+  async function describeSelectedImage() {
+    if (!selectedImageFile || visionState === VISION_STATE_DESCRIBING) {
+      return
+    }
+
+    const requestId = ++visionSequenceCounter
+    visionErrorMessage = ''
+    visionDescription = ''
+    visionState = VISION_STATE_DESCRIBING
+    visionStatusMessage = 'Describe image in progress...'
+
+    const requestBody = new FormData()
+    requestBody.append('image', selectedImageFile)
+
+    let response = null
+    try {
+      response = await fetch('/api/vision', {
+        method: 'POST',
+        body: requestBody,
+      })
+    } catch {
+      if (requestId !== visionSequenceCounter) {
+        return
+      }
+      setVisionError('Could not reach vision service.', { allowRetry: true })
+      return
+    }
+
+    if (requestId !== visionSequenceCounter) {
+      return
+    }
+
+    if (!response.ok) {
+      const detail = await getVisionFailureDetail(response)
+      if (requestId !== visionSequenceCounter) {
+        return
+      }
+      setVisionError(detail, { allowRetry: true })
+      return
+    }
+
+    let payload = null
+    try {
+      payload = await response.json()
+    } catch {
+      if (requestId !== visionSequenceCounter) {
+        return
+      }
+      setVisionError('Vision response was invalid.', { allowRetry: true })
+      return
+    }
+
+    if (requestId !== visionSequenceCounter) {
+      return
+    }
+
+    const responseText = typeof payload?.text === 'string' ? payload.text.trim() : ''
+    if (!responseText) {
+      setVisionError('Vision response did not include description text.', { allowRetry: true })
+      return
+    }
+
+    visionState = VISION_STATE_DESCRIBED
+    visionStatusMessage = 'Description ready'
+    visionDescription = responseText
   }
 
   async function startRecording() {
@@ -482,6 +712,80 @@
         </button>
       {/each}
     </div>
+  </section>
+
+  <section class="card vision">
+    <h2>Image Describe</h2>
+    <p class="preview-copy">
+      Capture from camera or upload from gallery/desktop, then run Describe on the selected image.
+    </p>
+
+    <input
+      class="hidden-file-input"
+      bind:this={takePhotoInputElement}
+      type="file"
+      accept="image/*"
+      capture="environment"
+      data-testid="take-photo-input"
+      aria-hidden="true"
+      tabindex="-1"
+      onchange={handleImageInput}
+    />
+    <input
+      class="hidden-file-input"
+      bind:this={uploadPhotoInputElement}
+      type="file"
+      accept="image/*"
+      data-testid="upload-photo-input"
+      aria-hidden="true"
+      tabindex="-1"
+      onchange={handleImageInput}
+    />
+
+    <div class="vision-actions">
+      <button class="secondary" type="button" onclick={launchTakePhotoPicker} disabled={visionState === VISION_STATE_DESCRIBING}>
+        Take Photo
+      </button>
+      <button class="secondary" type="button" onclick={launchUploadPhotoPicker} disabled={visionState === VISION_STATE_DESCRIBING}>
+        Upload Photo
+      </button>
+    </div>
+
+    <button
+      class="action action-describe"
+      type="button"
+      onclick={describeSelectedImage}
+      disabled={!selectedImageFile || visionState === VISION_STATE_DESCRIBING}
+    >
+      Describe
+    </button>
+
+    <p class={`state-pill vision-state-pill vision-state-${visionState}`} data-testid="vision-state-pill">{visionState}</p>
+    <p class="status" aria-live={visionState === VISION_STATE_ERROR ? 'off' : 'polite'} data-testid="vision-status-message">
+      {visionStatusMessage}
+    </p>
+
+    {#if visionErrorMessage}
+      <p class="vision-error" data-testid="vision-error-message" role="alert">{visionErrorMessage}</p>
+    {/if}
+
+    <div class="vision-preview">
+      {#if selectedImagePreviewUrl}
+        <img src={selectedImagePreviewUrl} alt="Selected preview" />
+        <p class="vision-file-name">{selectedImageName}</p>
+      {:else}
+        <p class="placeholder">No image selected yet.</p>
+      {/if}
+    </div>
+  </section>
+
+  <section class="card vision-description">
+    <h2>Image Description</h2>
+    {#if visionDescription}
+      <p>{visionDescription}</p>
+    {:else}
+      <p class="placeholder">Description output will appear here.</p>
+    {/if}
   </section>
 
   <section class="card transcript">
