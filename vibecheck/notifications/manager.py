@@ -10,6 +10,8 @@ IntensityLevelName = Literal["chill", "vibing", "dialed_in", "locked_in", "ralph
 class IntensityManager:
     """Controls notification aggressiveness (Chill → Ralph)."""
 
+    DEFAULT_LEVEL = 2
+
     LEVELS: dict[int, IntensityLevelName] = {
         1: "chill",
         2: "vibing",
@@ -22,10 +24,26 @@ class IntensityManager:
 
     def __init__(self, *, level: int = 2, now_fn: Callable[[], datetime] | None = None) -> None:
         self._now_fn = now_fn or datetime.now
-        self.level = int(level)
+        self._level = self._clamp_level(level)
         self.snooze_until: datetime | None = None
         self.idle_since: datetime | None = None
         self._idle_notified: set[int] = set()
+
+    @classmethod
+    def _clamp_level(cls, value: object) -> int:
+        try:
+            level = int(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            level = cls.DEFAULT_LEVEL
+        return min(max(level, 1), max(cls.LEVELS))
+
+    @property
+    def level(self) -> int:
+        return self._level
+
+    @level.setter
+    def level(self, value: object) -> None:
+        self._level = self._clamp_level(value)
 
     def _now(self) -> datetime:
         return self._now_fn()
@@ -43,7 +61,7 @@ class IntensityManager:
         if self.snooze_until is not None and now < self.snooze_until:
             return False
 
-        level = int(self.level)
+        level = self._level
         match level:
             case 1 | 2:
                 return False
@@ -60,7 +78,6 @@ class IntensityManager:
         now = self._now()
         if self.idle_since is None:
             self.idle_since = now
-        self._idle_notified.clear()
 
     def mark_active(self) -> None:
         self.idle_since = None
@@ -71,24 +88,24 @@ class IntensityManager:
         if self.idle_since is None:
             return None
 
-        now = self._now()
-        if self.snooze_until is not None and now < self.snooze_until:
+        if not self.should_notify("idle"):
             return None
 
+        now = self._now()
         minutes = int((now - self.idle_since).total_seconds() // 60)
         if minutes < 5:
             return None
 
-        level = int(self.level)
-        allowed_thresholds: tuple[int, ...]
-        if level == 3:
-            allowed_thresholds = (5,)
-        elif level == 4:
-            allowed_thresholds = (5, 10, 15)
-        elif level >= 5:
-            allowed_thresholds = (5, 10, 15, 30)
-        else:
-            return None
+        level = self._level
+        match level:
+            case 3:
+                allowed_thresholds = (5,)
+            case 4:
+                allowed_thresholds = (5, 10, 15)
+            case 5:
+                allowed_thresholds = (5, 10, 15, 30)
+            case _:
+                return None
 
         for threshold in allowed_thresholds:
             if minutes < threshold:
@@ -130,4 +147,3 @@ class IntensityManager:
 
         self.snooze_until = until
         return until
-

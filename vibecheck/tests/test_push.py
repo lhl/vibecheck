@@ -81,6 +81,11 @@ async def test_push_sends_notification_on_approval_request(
 
     monkeypatch.setattr(push_module, "webpush_async", fake_webpush)
 
+    async def fake_copy(_tool_name: str, _args: dict[str, object]) -> str:
+        return "Please approve (test)"
+
+    monkeypatch.setattr(push_module, "generate_notification_copy", fake_copy)
+
     subscription = {
         "endpoint": "https://example.com/push/abc",
         "keys": {"p256dh": "p256dh-key", "auth": "auth-key"},
@@ -111,6 +116,8 @@ async def test_push_sends_notification_on_approval_request(
     assert calls, "expected pywebpush.webpush to be called"
     payload = calls[0]["data"]
     assert isinstance(payload, str) and "requireInteraction" in payload
+    decoded = json.loads(payload)
+    assert decoded["body"] == "Please approve (test)"
     assert calls[0]["vapid_claims"] == {"sub": "mailto:tests@example.com"}
 
     assert bridge.resolve_approval("tc-push-1", approved=True)
