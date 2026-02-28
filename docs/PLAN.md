@@ -448,7 +448,16 @@ Note: L1.5 + Phase 3.1 (TUI hardening) are prerequisites for all higher layers (
 | Translation | Mistral SDK (`mistral-large-latest` chat) |
 | Notification copy | Mistral SDK (`ministral-8b-latest` chat) |
 | Push notifications | pywebpush (VAPID) |
-| Auth | PSK (pre-shared key, timing-safe comparison) |
+| Auth | PSK (pre-shared key, timing-safe comparison) — see note below |
+
+> **PSK transport policy (decided 2026-02-28):** The REST middleware accepts
+> PSK via both `X-PSK` header and `?psk=` query parameter. Query-param auth
+> is intentionally kept for developer convenience (easy `curl` testing,
+> shareable links). WebSocket *requires* query-param auth because the browser
+> `WebSocket` API cannot set custom headers. Operators should be aware that
+> query-param PSKs may appear in server access logs and browser history.
+> For production hardening, consider restricting REST to header-only and
+> rotating the PSK periodically.
 
 ### Frontend
 | Component | Technology |

@@ -2,6 +2,16 @@
 
 ## 2026-02-28
 
+### Phase 6 follow-up review remediation
+- Fixed **High**: push notification actions now call-bound — payload includes `call_id`, SW threads it through to App.svelte, which uses it directly instead of fetching `/state` for "whatever is currently pending". Stale notifications can no longer approve the wrong tool call.
+- Fixed **Medium**: idle escalation now tracks all waiting sessions via `set[str]` instead of a single `_idle_session_id` slot. Concurrent sessions all receive escalation pushes.
+- Fixed **Low**: MicButton `onDestroy` now calls `stopRecording()` to release mic/tracks if component unmounts during recording.
+- Fixed **Low**: STT and translate routes wrap Mistral SDK calls in `asyncio.wait_for` (30s / 15s respectively) and return HTTP 504 on timeout.
+- Fixed FE error UX: ChatMessage and ApprovalPanel now extract JSON `{detail}` from error responses (was showing raw `statusText`).
+- **Decision**: PSK-in-query-param for REST routes intentionally kept for dev convenience; documented in `docs/PLAN.md` with production hardening note.
+- Test suite: 116 backend (+3 new: call_id in push payload, multi-session idle, STT/translate timeout), 59 frontend, build OK.
+- Updated `docs/REVIEW-phase6.md` fix status and remaining items.
+
 ### Repository setup
 - Created `vibecheck` repo
 - Created README.md (full product brief)

@@ -14,7 +14,7 @@ This file captures the initial Phase 6 review notes and tracks the follow-up fix
 ## Status (post-follow-up fixes)
 
 Verification (current):
-- Backend: `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` → **113 passed**
+- Backend: `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` → **116 passed**
 - Frontend: `cd vibecheck/frontend && npm test && npm run build` → **59 passed**, build **OK**
 
 ### Fix status
@@ -27,6 +27,8 @@ Verification (current):
 - ✅ Handle `touchcancel` to avoid stuck recording state: `d4ad387`
 - ✅ Recorder error clears active state (no permanent lockout after `recorder.onerror`): `faecd36`
 - ✅ Max recording duration (defaults to 60s): `9ab249a`
+- ✅ MicButton teardown now stops active recording (releases mic/tracks): `22f4423`
+- ✅ Upstream timeout (30s) on STT SDK call — returns 504 on hang: `22f4423`
 
 #### Push + smart notifications (6B/6C)
 
@@ -36,6 +38,8 @@ Verification (current):
 - ✅ Unsubscribe ordering fixed (backend first, then local unsubscribe): `ae72a8d`
 - ✅ Subscribe reuses existing subscription (avoids `InvalidStateError`): `9bb919a`
 - ✅ Idle escalation worker wired (requires intensity `level >= 3`; no UI/API yet): `f07df48`
+- ✅ Push payload includes `call_id` — notification actions are now call-bound (stale notifications can't approve wrong call): `22f4423`
+- ✅ Idle escalation tracks all waiting sessions (set, not single slot): `22f4423`
 
 #### Translation (6D)
 
@@ -43,6 +47,7 @@ Verification (current):
 - ✅ Reject whitespace-only translate text: `0079363`
 - ✅ Cap translation cache size (200): `9b6589c`
 - ✅ Expanded backend test coverage for auth/error paths: `7f44290`, `7e4c98a`
+- ✅ Upstream timeout (15s) on translate SDK call — returns 504 on hang: `22f4423`
 
 #### Watch item (user bubbles)
 
@@ -52,7 +57,7 @@ Verification (current):
 ### Remaining (non-blocking)
 
 - Rate limiting / usage caps on `/api/voice/transcribe`, `/api/translate`, `/api/push/*`.
-- Decide PSK-in-query-param policy for REST (WS currently uses query param; REST middleware still accepts it).
+- ~~Decide PSK-in-query-param policy for REST.~~ **Decision (2026-02-28):** intentionally kept for dev convenience; documented in `docs/PLAN.md`.
 - No user-facing API/UI to configure push intensity level or snooze.
 - ~~Translation FE error UX doesn’t parse JSON `{detail}` (uses `status/statusText` only).~~ Fixed in `b6f50d1` (ChatMessage + ApprovalPanel now extract `detail`).
 
