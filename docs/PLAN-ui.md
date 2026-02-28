@@ -1,0 +1,164 @@
+# vibecheck — UI/UX Plan
+
+> **Status:** Design spec for Phase 7 FE polish. Guides WU-23 implementation.
+> **Last updated:** 2026-02-28
+
+---
+
+## Layout Structure
+
+Fixed viewport PWA layout with three zones. No page-level scroll — each zone manages its own overflow.
+
+```
+┌─────────────────────────────────┐
+│  HEADER (sticky top)            │
+│  logo + connection + session    │
+├─────────────────────────────────┤  ← header bottom edge
+│                                 │
+│  MESSAGE LOG (scrollable)       │
+│  fills remaining vertical space │
+│  overflow-y: auto               │
+│  overflow-x: hidden / wrap      │
+│                                 │
+├─────────────────────────────────┤
+│  MESSAGE INPUT (sticky bottom)  │
+│  textarea + send button         │
+├─────────────────────────────────┤
+│  STATUS LINE (footer)           │
+│  YOLO toggle / intensity / cost │
+└─────────────────────────────────┘
+```
+
+Full height = `100dvh` (dynamic viewport height for mobile browser chrome). Layout via flexbox column, message log gets `flex: 1` with `min-height: 0` to shrink properly.
+
+---
+
+## Header
+
+**Default (collapsed):**
+- vibecheck pixel-art logo (left)
+- Connection status indicator (dot: green=connected, red=disconnected)
+- Active session label: title or first 8 chars of UUID (e.g. `b8b6aa96…`)
+- Tap anywhere on header to expand
+
+**Expanded (session picker):**
+- Slides open below header bar
+- Lists active sessions (controllable=true), sorted reverse-chron by `started_at`
+- Each row: title (or "New session"), session ID prefix (`b8b6aa96…`), relative age, status badge
+- Attention icon on `waiting_approval` / `waiting_input` sessions
+- "Browse older sessions" collapsible section for non-active sessions
+- Tap a session to switch; picker collapses
+- Tap header bar again to collapse without switching
+
+**Connection status** (in header, always visible):
+- Green dot + "Connected" (or just dot for space)
+- Red dot + "Disconnected" — maybe with reconnect countdown
+- Yellow dot + "Reconnecting…"
+
+---
+
+## Message Log
+
+**Layout:**
+- `flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden`
+- Content wraps within the viewport width — no horizontal scroll
+- Wide content (code blocks, tool output) gets `overflow-x: auto` on the individual card, not the whole log
+- `word-break: break-word` on message text to prevent blowout
+
+**Auto-scroll behavior** (existing):
+- Auto-scroll to bottom on new messages when user is near bottom
+- "New messages ↓" button when scrolled up (already implemented)
+
+**Content types rendered:**
+- Assistant messages (markdown)
+- User messages
+- Tool call cards (collapsible)
+- Tool result cards
+- Approval request cards
+- Input request cards
+
+---
+
+## Message Input (Footer Top)
+
+**Layout:**
+- Pinned to bottom of message log area
+- Textarea (auto-grow to ~3 lines max, then scroll internally)
+- Send button (right side)
+- Mic button (left side, hold-to-record)
+- Auto-translate toggle (inline, existing)
+
+**Behavior:**
+- Enter to send (shift+enter for newline)
+- Disabled state when not connected or no session selected
+- Clear after send
+
+---
+
+## Status Line (Footer Bottom)
+
+The bottom-most bar of the app. Compact single-line strip.
+
+**Default content:**
+- Session status text (e.g. "idle", "running", "waiting approval")
+- Cost ticker when available (e.g. "$0.42 | 12K tokens") — right-aligned
+
+**Interactive elements:**
+- Tap to expand status panel (or long-press for YOLO toggle)
+- YOLO mode toggle: hidden by default, revealed via status line interaction. When active, pulsing visual indicator + "YOLO" badge
+- Future: intensity level, snooze controls (deferred)
+
+---
+
+## Notification / Alert Overlay
+
+For approval requests and input questions that need immediate attention.
+
+**Layout:**
+- Full-width modal overlay
+- Top edge starts below header bar (doesn't cover header)
+- Full remaining height
+- Semi-transparent backdrop: `rgba(0,0,0,0.7)` — blocks interaction with message log and input
+- Alert card(s) stack from the top of the overlay area
+
+**Behavior:**
+- Triggered when session enters `waiting_approval` or `waiting_input`
+- Cannot type or send messages while overlay is active (input is behind the shim)
+- Approve/Deny buttons (for approval) or response input (for questions) are in the overlay card
+- Overlay dismisses when approval/input is resolved
+- Multiple pending alerts stack vertically (rare but possible)
+
+**Alert card content:**
+- Tool name + args summary (for approvals)
+- Question text + options (for input requests)
+- Approve / Deny buttons (large, touch-friendly)
+- Haptic feedback on appearance: `navigator.vibrate(200)`
+
+---
+
+## Dark / Light Theme
+
+- CSS custom properties for all colors
+- Default: follow `prefers-color-scheme`
+- Manual toggle in header or status line
+- Key tokens: `--bg`, `--bg-card`, `--text`, `--text-muted`, `--accent`, `--border`, `--danger`, `--success`
+- Mistral brand colors preserved for accent/highlights regardless of theme
+
+---
+
+## Known Issues to Fix
+
+- [ ] Wide content (long code lines, URLs) breaks horizontal layout — needs `overflow-x: auto` on cards, `word-break` on text
+- [ ] Message input not locked to bottom on iOS Safari (keyboard push behavior)
+- [ ] No visual distinction between active/stale sessions in picker
+- [ ] Raw UUID shown as session label — needs title + ID prefix
+
+---
+
+## Mobile Considerations
+
+- Touch targets: minimum 44x44px for all interactive elements
+- Safe area insets: `env(safe-area-inset-*)` for notch/home indicator
+- `100dvh` not `100vh` to handle mobile browser chrome
+- Keyboard: `visualViewport` API to handle virtual keyboard resize
+- Pull-to-refresh: disabled (`overscroll-behavior: none` on body)
