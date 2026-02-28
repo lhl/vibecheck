@@ -1362,10 +1362,11 @@ uv run pytest vibecheck/tests/test_sessions.py -v
 - [ ] **Loading states** — skeletons, spinners
 - [ ] **Haptic feedback** — `navigator.vibrate(200)` on approval request
 
-**Deferred (post-hackathon):**
-- Settings panel (`SettingsPanel.svelte` — intensity slider, translation toggle, notification on/off, theme toggle)
-- Tool call diff viewer (`GET /api/sessions/{session_id}/diffs` → before/after)
-- Offline cache (store last 50 events in localStorage, render on reconnect)
+**Deferred (post-hackathon):** See "Deferred" section in `docs/PLAN.md` for full details.
+- Dedicated settings panel (intensity slider, snooze controls — existing inline settings stay)
+- Tool call diff viewer
+- Offline event cache
+- Rate limiting
 
 ### WU-35: Gap 2 — Phone Prompts Visible in TUI (Stretch)
 

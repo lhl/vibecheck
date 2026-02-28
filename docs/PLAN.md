@@ -250,7 +250,6 @@ See `docs/ANALYSIS-session-attachment.md` § "Phase 3 Validation: Confirmed Gaps
 - [ ] Session detail view (event backlog, file changes, token usage)
 - [ ] Session resume/continue from mobile (reattach bridge to a past session)
 - [ ] Dark/light theme
-- **Deferred:** Settings panel, tool call diff viewer, offline event cache
 
 ### Layer 7 — Stretch: Advanced Voice + ElevenLabs TTS
 
@@ -301,6 +300,34 @@ Multi-session *discovery and switching* is built into L1/L2. This layer adds act
 - [ ] QR code on slide → instant audience participation
 - [ ] Replay mode: speed-run playback of a full agent session
 - [ ] Confetti animation on task completion 🎉
+
+### Deferred (Post-Hackathon)
+
+Features designed but deferred to keep scope tight for submission. Details preserved here so nothing is lost.
+
+**Settings panel** (`SettingsPanel.svelte`):
+- Dedicated settings component (currently settings are inline in the picker area, which works fine for now)
+- Intensity slider — configure push notification intensity level (5 levels: Chill → Ralph). Backend `IntensityManager` exists but no UI/API to configure yet.
+- Snooze controls — 30min / 1hr / Until Morning. Never suppresses approval/question/error. Backend intensity model supports it, needs API + UI.
+- Notification on/off toggle (currently push subscribe/unsubscribe is inline)
+- Theme toggle (if dark/light theme ships, toggle can stay inline)
+
+**Tool call diff viewer**:
+- For `write_file` / `search_replace` tool calls: show before/after file diffs
+- Backend: `GET /api/sessions/{session_id}/diffs` returns structured diff data
+- Frontend: inline diff component in tool result cards (green/red lines or side-by-side)
+- WU-24 has the backend endpoint spec; frontend rendering is the main work
+
+**Offline event cache**:
+- Store last 50 events per session in `localStorage`
+- On reconnect, render cached events immediately while WebSocket backlog loads
+- Graceful merge when live backlog arrives (dedupe by event ID)
+- Helps with flaky mobile connections
+
+**Rate limiting**:
+- Usage caps on `/api/voice/transcribe`, `/api/translate`, `/api/push/*`
+- Per-PSK or per-session throttling
+- Not blocking for demo but needed for any public deployment
 
 ---
 
