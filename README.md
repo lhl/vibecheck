@@ -21,16 +21,49 @@
 ## Quick Start
 
 ```bash
+# Required: API auth for both REST + WebSocket (the PWA will prompt for this)
+export VIBECHECK_PSK=YOUR_PSK
+
+# Optional: required for voice + translation (push copy uses Ministral when set)
 export MISTRAL_API_KEY=YOUR_KEY
 
-# Live attach mode (planned, WU-27): runs Vibe TUI + WebSocket bridge in same process
-vibecheck-vibe
+# Recommended: Vibe TUI + vibecheck bridge (starts server on :7870)
+uv run vibecheck-vibe --ws-port 7870
 
-# Standalone bridge mode (no TUI, no live attach to terminal session)
+# Alternative: server-only bridge (serves built PWA from `vibecheck/static/`)
+cd vibecheck/frontend && npm run build
 uv run python -m vibecheck
 ```
 
 ---
+
+## Running
+
+### Terminal + phone (live attach)
+
+```bash
+uv run vibecheck-vibe --ws-port 7870
+```
+
+- Open the PWA at `https://your-domain/` (or `http://localhost:7870/` if local) and enter the PSK.
+- Pick the live session from the dropdown and hit **Connect**.
+
+> Note: push notifications + microphone require a secure context (HTTPS or `localhost`).
+
+### Server-only (no Vibe TUI)
+
+```bash
+cd vibecheck/frontend && npm run build
+uv run python -m vibecheck
+```
+
+### Quick health/state checks
+
+```bash
+curl http://localhost:7870/api/health
+curl -H "X-PSK: $VIBECHECK_PSK" http://localhost:7870/api/state
+curl -H "X-PSK: $VIBECHECK_PSK" http://localhost:7870/api/sessions
+```
 
 ## Hackathon Rubric Fit: Model Usage (Explicit)
 

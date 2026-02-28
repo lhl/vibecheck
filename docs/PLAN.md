@@ -77,26 +77,26 @@ Each layer builds on the previous. Every layer is an independently demoable stat
 
 The bridge is designed multi-session from the start. All state is keyed by `session_id`, so one vibecheck server manages N concurrent Vibe instances.
 
-- [ ] `SessionBridge` — per-session bridge wrapping one `AgentLoop` instance
+- [x] `SessionBridge` — per-session bridge wrapping one `AgentLoop` instance
   - `approval_callback` — intercept tool approvals, resolve via REST/WS
   - `user_input_callback` — intercept questions, resolve via REST/WS
   - Per-session pending state (`_pending_approval`, `_pending_input`, `_waiting_state`)
-- [ ] `SessionManager` — discover and manage multiple sessions
+- [x] `SessionManager` — discover and manage multiple sessions
   - Scan `~/.vibe/logs/session/` for existing Vibe sessions
   - `attach(session_id)` — create `SessionBridge` for a discovered session (`observe_only` or `replay` mode — **not** live control; live attach requires the session to be started via `vibecheck-vibe`)
   - `detach(session_id)` — stop receiving events, clean up
   - `list()` — return all known sessions with status (running/waiting/idle)
-- [ ] WebSocket `/ws/events/{session_id}` — stream `BaseEvent` types for one session
+- [x] WebSocket `/ws/events/{session_id}` — stream `BaseEvent` types for one session
   - Clients subscribe to a specific session (room-based routing)
   - Connection tracked per-session: `Dict[str, Set[WebSocket]]`
-- [ ] REST API (session-aware):
+- [x] REST API (session-aware):
   - `GET /api/sessions` — list discovered sessions with status summary
   - `GET /api/sessions/{session_id}` — session detail + event backlog
   - `POST /api/sessions/{session_id}/approve` — approve/deny tool calls
   - `POST /api/sessions/{session_id}/input` — respond to agent questions
   - `POST /api/sessions/{session_id}/message` — send new user messages to Vibe
   - `GET /api/state` — fleet summary (N running, N waiting, N idle)
-- [ ] Event broadcasting scoped to session subscribers
+- [x] Event broadcasting scoped to session subscribers
 
 > **Fallback:** If in-process `AgentLoop` hooks don't work as expected, fall back to tmux/PTY sidecar (terminal scraping). See `docs/ANALYSIS-session-attachment.md` for full option analysis.
 
@@ -113,25 +113,25 @@ Terminal (Textual TUI) ──┐
 Phone (PWA via WSS) ─────┘
 ```
 
-- [ ] `vibecheck-vibe` CLI wrapper replaces `vibe` command
+- [x] `vibecheck-vibe` CLI wrapper replaces `vibe` command
   - Creates AgentLoop using Vibe's libraries (same as `vibe` CLI)
   - Creates SessionBridge with `attach_to_loop()` — wires callbacks on the existing loop
   - Starts vibecheck FastAPI/WebSocket server on :7870 (uvicorn as Textual worker, same asyncio loop)
   - Launches Vibe's Textual TUI (`VibeCheckApp` subclass of `VibeApp`)
-- [ ] Bridge owns AgentLoop — single consumer of `act()` generator
+- [x] Bridge owns AgentLoop — single consumer of `act()` generator
   - Event tee: fan out events to both TUI renderer and WebSocket broadcast
   - Dual input: terminal keyboard and phone REST both go through `bridge.inject_message()`
   - Serialized through bridge's `_message_queue` / `_message_worker`
-- [ ] Session API exposes `attach_mode` and `controllable` fields:
+- [x] Session API exposes `attach_mode` and `controllable` fields:
   - `attach_mode: "live"` + `controllable: true` — started via `vibecheck-vibe`, full control
   - `attach_mode: "managed"` + `controllable: true` — bridge-created loop, full control
   - `attach_mode: "observe_only"` + `controllable: false` — discovered unmanaged session, read-only
   - `attach_mode: "replay"` + `controllable: true` — new loop from history, independent of terminal
-- [ ] Approval callback routes to both surfaces; either can resolve
+- [x] Approval callback routes to both surfaces; either can resolve
   - Mobile approves via REST → bridge resolves Future → TUI updates
   - TUI approves via keyboard → bridge resolves Future → mobile updates via WebSocket
   - Both surfaces show pending state; first to respond wins
-  - **Status:** Bridge-level dual-surface resolution validated (60 tests). TUI visual cleanup after remote resolution requires Phase 3.1 (WU-32/WU-34) — see below.
+  - **Status:** Bridge-level dual-surface resolution validated by tests. TUI visual cleanup after remote resolution requires Phase 3.1 (WU-32/WU-34) — see below.
 
 > **Fallback:** If VibeApp subclassing proves unworkable, fall back to tmux/PTY sidecar (Option C in `docs/ANALYSIS-session-attachment.md`). Brittle but demoable.
 

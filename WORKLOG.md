@@ -13,6 +13,11 @@
 - Test suite: 116 backend (+3 new: call_id in push payload, multi-session idle, STT/translate timeout), 60 frontend, build OK.
 - Updated `docs/REVIEW-phase6.md` fix status and remaining items.
 
+### Docs: running instructions
+- Updated `README.md` to add a **Running** section + refresh Quick Start (PSK requirement, `uv run vibecheck-vibe`, state-check curl commands).
+- Updated `docs/DEMO.md` to reference `vibecheck-vibe` (instead of `vibe`) and clarify the EC2 “server running” check.
+- Updated `docs/PLAN.md` to mark Layer 1 + 1.5 bridge items as complete (`[x]`).
+
 ### Repository setup
 - Created `vibecheck` repo
 - Created README.md (full product brief)

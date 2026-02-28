@@ -165,7 +165,7 @@ After launching scrcpy, use Niri's tiling to place:
 ### EC2 Prep
 
 - [ ] Vibe running and responsive
-- [ ] vibecheck bridge server running on :7870
+- [ ] `uv run vibecheck-vibe --ws-port 7870` running (Vibe TUI + vibecheck bridge on :7870)
 - [ ] Caddy serving HTTPS (verify `https://your-domain` loads)
 - [ ] WebSocket connectivity verified (phone connects, events flow)
 - [ ] Test project loaded (something Vibe can code against)
@@ -212,7 +212,7 @@ After launching scrcpy, use Niri's tiling to place:
 │  SSH into EC2              │  Pixel 9 via scrcpy           │
 │  Vibe agent running        │  vibecheck PWA                │
 │                            │                               │
-│  $ vibe                    │  ┌─────────────────────────┐  │
+│  $ vibecheck-vibe           │  ┌─────────────────────────┐  │
 │  > I'll create a REST...   │  │ 🟢 Vibe Mobile    🔔 ⚙️│  │
 │  > 🔧 bash: npm test       │  │                         │  │
 │  > ⏳ Waiting for approval  │  │ Chat messages...        │  │
@@ -244,8 +244,8 @@ presenterm slides.md
 # 1. Verify EC2 is live
 curl -s -H "X-PSK: $VIBECHECK_PSK" https://your-domain/api/state | jq .
 
-# 2. Verify Vibe is running on EC2
-ssh ec2 "pgrep -f 'vibe'"
+# 2. Verify vibecheck server is running on EC2 (preferred: vibecheck-vibe)
+ssh ec2 "pgrep -af 'vibecheck-vibe|vibecheck\\.launcher|python -m vibecheck'"
 
 # 3. Launch scrcpy
 scrcpy --window-title="vibecheck - Pixel 9" --window-borderless \
@@ -255,6 +255,7 @@ scrcpy --window-title="vibecheck - Pixel 9" --window-borderless \
 ssh ec2
 
 # 5. On phone: open vibecheck PWA
+# If prompted, enter the same PSK used in step 1.
 # Verify: green 🟢 connected indicator
 # Verify: can see any existing Vibe session events
 
