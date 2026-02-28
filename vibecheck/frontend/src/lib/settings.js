@@ -1,5 +1,6 @@
 const VOICE_LANGUAGE_KEY = 'vibecheck_voice_language'
 const NOTIFICATIONS_ENABLED_KEY = 'vibecheck_notifications_enabled'
+const AUTO_TRANSLATE_KEY = 'vibecheck_auto_translate'
 
 function safeLocalStorageGet(key) {
   try {
@@ -39,4 +40,12 @@ export function loadNotificationsEnabled() {
 
 export function storeNotificationsEnabled(value) {
   safeLocalStorageSet(NOTIFICATIONS_ENABLED_KEY, value ? 'true' : 'false')
+}
+
+export function loadAutoTranslateEnabled() {
+  return safeLocalStorageGet(AUTO_TRANSLATE_KEY) === 'true'
+}
+
+export function storeAutoTranslateEnabled(value) {
+  safeLocalStorageSet(AUTO_TRANSLATE_KEY, value ? 'true' : 'false')
 }

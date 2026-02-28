@@ -87,6 +87,19 @@ describe('App phase 4 shell', () => {
     expect(screen.getByRole('textbox', { name: 'Message input' })).toHaveAttribute('placeholder', 'Send a message...')
   })
 
+  it('persists the auto-translate toggle', async () => {
+    localStorage.setItem('vibecheck_psk', 'dev-psk')
+
+    render(App)
+
+    const button = screen.getByRole('button', { name: 'Auto-translate' })
+    expect(button).toHaveTextContent('Enable auto-translate')
+
+    await fireEvent.click(button)
+    expect(localStorage.getItem('vibecheck_auto_translate')).toBe('true')
+    expect(button).toHaveTextContent('Disable auto-translate')
+  })
+
   it('shows new message button when user is scrolled up', async () => {
     localStorage.setItem('vibecheck_psk', 'dev-psk')
     localStorage.setItem('vibecheck_sid', 's-1')

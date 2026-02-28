@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  loadAutoTranslateEnabled,
   loadNotificationsEnabled,
   loadVoiceLanguage,
+  storeAutoTranslateEnabled,
   storeNotificationsEnabled,
   storeVoiceLanguage,
 } from './settings'
@@ -34,5 +36,13 @@ describe('settings', () => {
     expect(loadNotificationsEnabled()).toBe(true)
     storeNotificationsEnabled(false)
     expect(loadNotificationsEnabled()).toBe(false)
+  })
+
+  it('persists auto-translate toggle', () => {
+    expect(loadAutoTranslateEnabled()).toBe(false)
+    storeAutoTranslateEnabled(true)
+    expect(loadAutoTranslateEnabled()).toBe(true)
+    storeAutoTranslateEnabled(false)
+    expect(loadAutoTranslateEnabled()).toBe(false)
   })
 })

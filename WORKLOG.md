@@ -524,3 +524,17 @@
   - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
   - `cd vibecheck/frontend && npm test` -> pass.
   - `cd vibecheck/frontend && npm run build` -> success.
+
+### Phase 6D Japanese auto-translation (WU-21)
+- Backend:
+  - Added `POST /api/translate` (`vibecheck/routes/translate.py`) proxying `mistral-large-latest` with a markdown/code-preserving system prompt.
+  - Added `vibecheck/tests/test_translate.py` mocking Mistral and asserting prompt construction.
+- Frontend:
+  - Added per-message `🌐` toggle in `ChatMessage.svelte` that swaps between original and translated text.
+  - Added in-memory translation cache keyed by event id (`src/lib/translate.js`) and CJK ratio skip (>30%).
+  - Added persisted global auto-translate toggle in `App.svelte` + `src/lib/settings.js`.
+  - Added/updated tests (`ChatMessage.test.js`, `App.test.js`, `translate.test.js`, `settings.test.js`).
+- Verification:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
+  - `cd vibecheck/frontend && npm test` -> pass.
+  - `cd vibecheck/frontend && npm run build` -> success.

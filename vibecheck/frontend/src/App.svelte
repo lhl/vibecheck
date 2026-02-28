@@ -15,8 +15,10 @@
   } from './lib/auth'
   import { subscribeToPush, unsubscribeFromPush, isPushSupported } from './lib/push'
   import {
+    loadAutoTranslateEnabled,
     loadNotificationsEnabled,
     loadVoiceLanguage,
+    storeAutoTranslateEnabled,
     storeNotificationsEnabled,
     storeVoiceLanguage,
   } from './lib/settings'
@@ -46,6 +48,7 @@
   let activeSessionId = ''
   let voiceLanguage = loadVoiceLanguage()
   let notificationsEnabled = loadNotificationsEnabled()
+  let autoTranslateEnabled = loadAutoTranslateEnabled()
   let notificationsError = ''
   let notificationsBusy = false
 
@@ -229,6 +232,11 @@
     storeVoiceLanguage(voiceLanguage)
   }
 
+  function toggleAutoTranslate() {
+    autoTranslateEnabled = !autoTranslateEnabled
+    storeAutoTranslateEnabled(autoTranslateEnabled)
+  }
+
   async function toggleNotifications() {
     if (!pushSupported || notificationsBusy) {
       return
@@ -359,6 +367,11 @@
         <option value="en">EN</option>
       </select>
 
+      <label for="translate-toggle">Auto-translate</label>
+      <button id="translate-toggle" type="button" class="secondary" on:click={toggleAutoTranslate}>
+        {autoTranslateEnabled ? 'Disable auto-translate' : 'Enable auto-translate'}
+      </button>
+
       <label for="notify-toggle">Notifications</label>
       <button
         id="notify-toggle"
@@ -398,7 +411,7 @@
             {#if event.type === 'tool_call'}
               <ToolCallCard toolCall={event} result={$toolResultsByCall.get(event.call_id) || null} />
             {:else}
-              <ChatMessage {event} />
+              <ChatMessage {event} {psk} autoTranslate={autoTranslateEnabled} />
             {/if}
           {/each}
         {/if}
