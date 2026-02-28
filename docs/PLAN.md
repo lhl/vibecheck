@@ -249,15 +249,8 @@ See `docs/ANALYSIS-session-attachment.md` § "Phase 3 Validation: Confirmed Gaps
   - Future: editable titles, LLM-generated summaries (not in scope now)
 - [ ] Session detail view (event backlog, file changes, token usage)
 - [ ] Session resume/continue from mobile (reattach bridge to a past session)
-- [ ] Tool call diff viewer (for write_file/search_replace — show before/after)
-- [ ] Settings panel:
-  - Intensity slider
-  - Translation toggle + voice language
-  - Notification on/off
-  - Snooze controls
-  - Theme toggle
 - [ ] Dark/light theme
-- [ ] Offline event cache (show last known state when reconnecting)
+- **Deferred:** Settings panel, tool call diff viewer, offline event cache
 
 ### Layer 7 — Stretch: Advanced Voice + ElevenLabs TTS
 

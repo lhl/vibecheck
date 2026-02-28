@@ -1357,17 +1357,15 @@ uv run pytest vibecheck/tests/test_sessions.py -v
   - **Future (not in scope):** editable titles, LLM-generated summaries
 - [ ] **Session detail view** — tap session in list → expanded view with event backlog
 - [ ] **Session resume** — tap disconnected session → reattach via `POST /api/sessions/{session_id}/resume`
-- [ ] **Settings panel** — `SettingsPanel.svelte`
-  - Intensity slider (if L4b done)
-  - Translation toggle + voice language
-  - Notification on/off
-  - Theme toggle
 - [ ] **Dark/light theme** — CSS custom properties, `prefers-color-scheme` default
-- [ ] **Tool call diff viewer** — for write_file/search_replace: `GET /api/sessions/{session_id}/diffs` → before/after
-- [ ] **Offline cache** — store last 50 events in localStorage, render on reconnect
 - [ ] **Error states** — friendly messages, retry buttons
 - [ ] **Loading states** — skeletons, spinners
 - [ ] **Haptic feedback** — `navigator.vibrate(200)` on approval request
+
+**Deferred (post-hackathon):**
+- Settings panel (`SettingsPanel.svelte` — intensity slider, translation toggle, notification on/off, theme toggle)
+- Tool call diff viewer (`GET /api/sessions/{session_id}/diffs` → before/after)
+- Offline cache (store last 50 events in localStorage, render on reconnect)
 
 ### WU-35: Gap 2 — Phone Prompts Visible in TUI (Stretch)
 
