@@ -380,6 +380,47 @@ Right: Quick feature flashes on phone — session list with multiple agents, tap
 - The left terminal transition (logo → Vibe output) is just clearing the screen / switching tmux panes
 - Voiceover can be recorded live or dubbed after (dub is safer for pacing)
 
+#### Rehearsal Runsheet (2-min video)
+
+Rehearse with a stopwatch. Left = terminal pane. Right = phone (scrcpy). Voiceover is recorded or live.
+
+| Time | Say | Do |
+|------|-----|----|
+| 0:00 | *(beat — 2s silence)* | Logo + bullets visible on left. Phone connected on right, session list showing. |
+| 0:02 | "You vibecode. Your agent stops and waits for you." | — |
+| 0:06 | "You've walked away. It just sits there." | — |
+| 0:09 | "vibecheck — mission control for your Vibe agents, right from your phone." | — |
+| 0:15 | — | **Left: clear logo, switch to Vibe terminal.** Vibe is mid-task, output scrolling. |
+| 0:17 | "Your agent writes code, runs tools —" | Phone: events streaming in real time. |
+| 0:21 | "everything streams to your phone live." | — |
+| 0:28 | — | **Phone: approval prompt appears.** Let it sit for 2s. |
+| 0:30 | "When it needs approval —" | — |
+| 0:32 | "tap." | **Phone: tap Approve.** |
+| 0:33 | — | Left: Vibe continues. Let it breathe 5s. |
+| 0:38 | "It keeps going. That's the loop." | — |
+| 0:42 | — | Let streaming run another 8s. Second approval if one appears naturally — approve it. |
+| 0:50 | "Full voice loop." | **Phone: tap mic button.** |
+| 0:52 | — | **Speak into phone (Japanese): "テストを実行して"** |
+| 0:56 | — | Voxtral transcription appears. Tap send. |
+| 0:59 | "Voxtral transcribes your voice in —" | Vibe acts on left. |
+| 1:03 | — | **Phone: ElevenLabs TTS plays response aloud.** |
+| 1:05 | "ElevenLabs speaks the response back. Any language." | — |
+| 1:10 | "Close the app." | **Phone: swipe PWA away.** Screen shows home/lock. |
+| 1:13 | "Walk away." | Left: Vibe keeps working, hits a tool call. |
+| 1:17 | "Your phone buzzes when the agent needs you." | **Phone: notification appears on lock screen.** |
+| 1:21 | "Approve from your lock screen." | **Phone: tap Approve on notification.** |
+| 1:24 | — | Left: Vibe continues. |
+| 1:27 | — | **Left: switch back to logo + bullets.** Phone: reopen PWA. |
+| 1:30 | "Multi-session fleet control." | **Phone: show session switcher, 2-3 agents listed.** |
+| 1:33 | "Japanese translation." | **Phone: tap translate toggle on a message.** Japanese appears. |
+| 1:36 | "Hooked straight into Vibe's event loop — no terminal scraping, no upstream changes." | — |
+| 1:41 | "Devstral codes, Voxtral transcribes, Ministral notifies, Mistral Large translates, ElevenLabs speaks." | — |
+| 1:48 | "vibecheck — check your vibes from anywhere." | — |
+| 1:52 | — | Hold 3s. |
+| 1:55 | *(end)* | Stop recording. |
+
+**Total: 1:55.** 5 seconds of buffer to hard 2:00 limit.
+
 ---
 
 ### SCRIPT B: 5-Minute Live Presentation (jury)
@@ -499,6 +540,76 @@ QR code on screen → the live URL. ASCII logo returns behind it.
 **[END — ~4:30]** (30 seconds buffer for applause / transition to Q&A)
 
 **Criteria coverage:** U anchors the open (B2) and mid-demo (B5, B7). D is sustained through the entire live demo phase — 2:40 of pure product. A is woven throughout (architecture slide, Vibe hooks, Voxtral, translation). T lands in B3 and is visible in B5's real-time streaming. C hits in B1 (logo), B2 (novelty framing), B6 (Japanese voice), B9 (multi-session), B10 (intensity personality).
+
+#### Rehearsal Runsheet (5-min live)
+
+Rehearse with a stopwatch. Phase 1 = presenterm fullscreen. Phase 2/3 = 50/50 terminal + scrcpy.
+
+| Time | Say | Do |
+|------|-----|----|
+| | **PHASE 1 — SLIDES** | |
+| 0:00 | "vibecheck." | **Slide 1: ASCII logo.** Let it land — 3 second pause. |
+| 0:10 | "Raise your hand if you've done some vibecoding this weekend." | **Slide 2: "the problem".** |
+| 0:15 | *(pause for hands)* | — |
+| 0:17 | "Me too. Here's the thing — your agent is coding, and then it stops. 'Can I run npm test?'" | — |
+| 0:24 | "And if you've walked away... it just sits there. Blocked. Waiting for you." | — |
+| 0:30 | "We got tired of being chained to our terminals. So we built vibecheck — mission control for your Vibe agents, from your phone." | — |
+| 0:38 | "Most mobile bridges wrap a terminal — tmux, PTY, screen scraping." | **Slide 3: architecture diagram + model list.** |
+| 0:42 | "We tap directly into Vibe's AgentLoop. Same process runs the TUI and the phone UI — no upstream changes to Vibe." | — |
+| 0:49 | "Structured events, native mobile UI, no polling." | — |
+| 0:52 | "Five models: Devstral codes, Voxtral transcribes, Ministral notifies, Mistral Large translates, ElevenLabs speaks." | — |
+| 0:58 | "Let me show you." | — |
+| | **PHASE 2 — LIVE DEMO** | |
+| 1:00 | — | **Press q. Resize to 50/50. scrcpy opens.** Terminal: SSH to EC2, Vibe running. Phone: PWA connected. |
+| 1:05 | — | Let events stream for 5s. Audience sees real-time flow. |
+| 1:10 | "Vibe is writing code right now. Everything it does streams to my phone." | Phone: events appearing. |
+| 1:18 | — | **Wait for approval prompt.** (If pre-staged, it appears now.) |
+| 1:20 | "It needs approval." | Phone: approval panel visible. |
+| 1:23 | — | **Phone: tap Approve.** |
+| 1:24 | — | Left: Vibe continues. Let it breathe. |
+| 1:30 | "That's the core loop. Agent works, you approve from your pocket." | — |
+| 1:36 | — | Let a second approval come if natural. Approve it. |
+| 1:45 | — | If no second approval by 1:45, move on. |
+| 1:50 | — | Let streaming breathe to 2:00. |
+| 2:00 | "Let's try voice." | **Phone: tap mic button.** |
+| 2:03 | — | **Speak into phone: "テストを実行して"** (run the tests). |
+| 2:08 | — | Voxtral transcription appears in input. |
+| 2:10 | — | **Phone: tap send.** |
+| 2:12 | — | Left: Vibe receives instruction, starts acting. |
+| 2:18 | — | **Phone: ElevenLabs TTS plays agent response aloud.** Make sure room hears it. |
+| 2:22 | "Full voice loop. Voxtral transcribes your voice in — ElevenLabs speaks the response back out. Japanese, English, whatever you need." | — |
+| 2:35 | — | Let the voice moment settle. |
+| 2:40 | "Now watch this." | **Phone: swipe PWA away.** Lock screen visible. |
+| 2:44 | "App is closed." | Left: Vibe keeps working. |
+| 2:48 | — | Left: Vibe hits a tool call. |
+| 2:52 | — | **Phone buzzes.** Notification on lock screen. |
+| 2:54 | "Phone buzzes. 'bash wants to run npm test.'" | — |
+| 2:58 | — | **Phone: tap Approve on notification.** |
+| 3:00 | — | Left: Vibe continues. |
+| 3:03 | "Close the app. Walk away. Your phone buzzes. Approve from your lock screen. Your agent never stops." | — |
+| 3:12 | — | **Phone: reopen PWA.** |
+| 3:15 | "One more thing." | **Phone: tap translate toggle on an English message.** |
+| 3:18 | — | Japanese translation appears. |
+| 3:20 | "One toggle — everything in Japanese. Mistral Large, code-aware. It knows not to translate your variable names." | — |
+| 3:28 | — | **Phone: open session switcher.** |
+| 3:30 | "And you're not limited to one agent. Mission control — switch between them, approve one, check on another." | 2-3 sessions listed. |
+| | **PHASE 3 — CLOSE** | |
+| 3:40 | *(optional — read the room)* "How hard are you going? Chill... Locked In... Ralph." | **Phone: show intensity slider.** Slide it. |
+| 3:50 | "Named after Ralph Wiggum. Your agent won't stop and neither will your notifications." | — |
+| 3:55 | — | **Show QR code on screen.** ASCII logo returns behind it. |
+| 3:57 | "Want to try it? Pull out your phone." | — |
+| 4:00 | *(pause 10s — let them scan)* | Watch faces as events appear on audience phones. |
+| 4:10 | — | — |
+| 4:15 | "You're watching the live session right now." | — |
+| 4:20 | "That's vibecheck — check your vibes from anywhere." | — |
+| 4:25 | — | Hold. |
+| 4:30 | *(end)* | 30s buffer to 5:00. |
+
+**Total: 4:30.** 30 seconds of buffer to hard 5:00 limit.
+
+**If running long**, cut in this order: (1) intensity slider (B10, saves 15s), (2) shorten the streaming breathing room in B5, (3) trim translation to just the tap with no voiceover.
+
+**If running short**, let the core loop (B5) and voice loop (B6) breathe longer — the real-time feel is the demo.
 
 ---
 
