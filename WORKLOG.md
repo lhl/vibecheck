@@ -567,3 +567,21 @@
 - Verification:
   - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
   - `cd vibecheck/frontend && npm test && npm run build` -> pass.
+
+### Phase 6 review fixes (Reviewer 3 follow-ups)
+- Voice:
+  - Added max payload guard (`VIBECHECK_MAX_AUDIO_BYTES`, default 10MB) for both raw and multipart uploads (`vibecheck/routes/voice.py`).
+  - Added oversized-payload coverage (`vibecheck/tests/test_voice.py`).
+- MicButton:
+  - Added `touchcancel` handling to avoid stuck recordings on interrupted touches (`vibecheck/frontend/src/components/MicButton.svelte`).
+  - Added regression coverage (`vibecheck/frontend/src/components/MicButton.test.js`).
+- Push:
+  - App now handles push approve/deny action buttons by fetching pending approval state then POSTing `/approve` (`vibecheck/frontend/src/App.svelte` + `vibecheck/frontend/src/App.test.js`).
+  - Hardened VAPID key handling: corrupt `vapid_keys.json` regenerates keys, file permissions restricted to `0600`, and VAPID `sub` claim configurable via `VIBECHECK_VAPID_SUB` (`vibecheck/push.py`, `vibecheck/tests/test_push.py`).
+- Translation:
+  - Added request caps + language-code validation (`MAX_TRANSLATE_CHARS`, `LANG_CODE_PATTERN`) with rejection tests (`vibecheck/routes/translate.py`, `vibecheck/tests/test_translate.py`).
+- Coverage:
+  - Added `/api/push/*`, `/api/translate`, `/api/voice/transcribe` to the PSK-required regression matrix (`vibecheck/tests/test_api.py`).
+- Verification:
+  - `UV_CACHE_DIR=/tmp/uv-cache uv run pytest vibecheck/tests/ -v` -> pass.
+  - `cd vibecheck/frontend && npm test && npm run build` -> pass.
