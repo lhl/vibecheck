@@ -183,6 +183,7 @@
 <style>
   .chat-message {
     max-width: 100%;
+    min-width: 0;
     border-radius: 0;
     padding: 0.7rem 0.85rem;
     display: grid;

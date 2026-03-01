@@ -100,6 +100,7 @@
     border: 1px solid var(--card-border);
     border-radius: 2px;
     background: var(--card-bg-alt);
+    min-width: 0;
     overflow: hidden;
   }
 
