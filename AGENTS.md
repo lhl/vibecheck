@@ -187,6 +187,14 @@ For every work unit, verify:
 - Do not revert, restore, or "clean up" files you didn't modify
 - Unrelated dirty/untracked files in the worktree are expected and non-blocking
 
+### Single-File Contention
+
+- If two agents need to touch the same file and edits may overlap, **stop and await instruction** before continuing in that file.
+- Do not keep editing, staging, or committing contested-file changes until one agent is explicitly designated to proceed.
+- The designated agent should do a careful selective stage (`git add -p`) and commit only their scoped hunks first to unblock others.
+- The non-designated agent should leave that file untouched until the first commit lands and they can rebase/continue cleanly.
+- Never resolve contention by force-staging the whole file or reverting another agent’s work.
+
 ### Git Hygiene
 
 - **NEVER** use `git add .`, `git add -A`, or `git commit -a`
@@ -246,7 +254,7 @@ WU-03: proto websocket-reconnect
 | You see uncommitted changes to files outside your WU | Ignore them — another agent is working |
 | `git status` shows modified files you didn't touch | Normal — don't stage them |
 | Your tests import a module another agent is building | Use the existing interface/stubs; if they don't exist yet, create a minimal mock |
-| Two agents need to modify the same file | Coordinate — or one agent adds to the top of the file, the other to the bottom |
+| Two agents need to modify the same file | Stop and await instruction; one designated agent selectively stages and commits first |
 | Merge conflict on pull | Resolve only your changes, keep theirs |
 
 ---
