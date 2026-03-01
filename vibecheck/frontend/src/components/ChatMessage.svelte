@@ -6,10 +6,17 @@
   export let event
   export let psk = ''
   export let autoTranslate = false
+  export let targetLanguage = 'ja'
 
   $: roleClass = event?.type === 'user_message' ? 'user' : 'assistant'
   $: originalText = event?.content || ''
-  $: canTranslate = Boolean(event?.id && originalText && !shouldSkipTranslation(originalText))
+  $: targetLanguageCode = targetLanguage === 'en' ? 'en' : 'ja'
+  $: translationCacheKey = event?.id ? `${event.id}:${targetLanguageCode}` : ''
+  $: canTranslate = Boolean(
+    event?.id &&
+      originalText &&
+      !(targetLanguageCode === 'ja' && shouldSkipTranslation(originalText)),
+  )
   $: body = renderBasicMarkdown(showTranslated && translatedText ? translatedText : originalText)
   $: timestamp = Number.isFinite(event?.timestamp)
     ? new Date(event.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -21,13 +28,30 @@
   let translateError = ''
   let destroyed = false
   let abortController = null
+  let previousTargetLanguage = targetLanguageCode
+
+  $: if (targetLanguageCode !== previousTargetLanguage) {
+    previousTargetLanguage = targetLanguageCode
+    showTranslated = false
+    translatedText = ''
+    translateError = ''
+    if (abortController) {
+      try {
+        abortController.abort()
+      } catch {
+        // no-op
+      }
+      abortController = null
+    }
+    isTranslating = false
+  }
 
   async function ensureTranslated() {
     if (!event?.id || !originalText) {
       return ''
     }
 
-    const cached = getCachedTranslation(event.id)
+    const cached = getCachedTranslation(translationCacheKey)
     if (cached) {
       if (!destroyed) {
         translatedText = cached
@@ -54,7 +78,7 @@
         'Content-Type': 'application/json',
         'X-PSK': psk,
       },
-      body: JSON.stringify({ text: originalText, target_lang: 'ja' }),
+      body: JSON.stringify({ text: originalText, target_lang: targetLanguageCode }),
       signal: abortController.signal,
     })
 
@@ -79,7 +103,7 @@
       throw new Error('Translation returned empty text.')
     }
 
-    setCachedTranslation(event.id, text)
+    setCachedTranslation(translationCacheKey, text)
     if (!destroyed) {
       translatedText = text
     }

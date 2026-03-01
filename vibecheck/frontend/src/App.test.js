@@ -119,18 +119,53 @@ describe('App phase 4 shell', () => {
     expect(screen.getByRole('textbox', { name: 'Message input' })).toHaveAttribute('placeholder', 'Send a message...')
   })
 
-  it('persists the auto-translate toggle', async () => {
+  it('uses translate language setting and removes auto-translate/theme controls', async () => {
     localStorage.setItem('vibecheck_psk', 'dev-psk')
 
     render(App)
 
     await openSettings()
-    const button = screen.getByRole('button', { name: 'Auto-translate' })
-    expect(button).toHaveTextContent('Enable auto-translate')
+    const languageSelect = screen.getByLabelText('Translate language')
+    expect(languageSelect).toHaveValue('ja')
 
-    await fireEvent.click(button)
-    expect(localStorage.getItem('vibecheck_auto_translate')).toBe('true')
-    expect(button).toHaveTextContent('Disable auto-translate')
+    await fireEvent.change(languageSelect, { target: { value: 'en' } })
+    expect(localStorage.getItem('vibecheck_voice_language')).toBe('en')
+
+    expect(screen.queryByRole('button', { name: 'Auto-translate' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Theme:/ })).not.toBeInTheDocument()
+  })
+
+  it('requires confirmation before forgetting PSK', async () => {
+    localStorage.setItem('vibecheck_psk', 'dev-psk')
+    const confirmSpy = vi.fn(() => false)
+    vi.stubGlobal('confirm', confirmSpy)
+
+    render(App)
+    await openSettings()
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Forget Key' }))
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(localStorage.getItem('vibecheck_psk')).toBe('dev-psk')
+    expect(screen.queryByRole('heading', { name: 'Enter PSK' })).not.toBeInTheDocument()
+
+    confirmSpy.mockReturnValue(true)
+    await fireEvent.click(screen.getByRole('button', { name: 'Forget Key' }))
+    expect(localStorage.getItem('vibecheck_psk')).toBeNull()
+    expect(await screen.findByRole('heading', { name: 'Enter PSK' })).toBeInTheDocument()
+  })
+
+  it('allows changing the PSK from settings using a password field', async () => {
+    localStorage.setItem('vibecheck_psk', 'dev-psk')
+
+    render(App)
+    await openSettings()
+
+    const input = screen.getByLabelText('New PSK')
+    await fireEvent.input(input, { target: { value: 'next-psk' } })
+    await fireEvent.click(screen.getByRole('button', { name: 'Update Key' }))
+
+    expect(localStorage.getItem('vibecheck_psk')).toBe('next-psk')
+    expect(screen.queryByRole('heading', { name: 'Enter PSK' })).not.toBeInTheDocument()
   })
 
   it('handles push approve action by resolving the pending approval via REST', async () => {

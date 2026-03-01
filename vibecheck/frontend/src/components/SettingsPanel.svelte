@@ -2,12 +2,11 @@
   import { createEventDispatcher } from 'svelte'
 
   export let voiceLanguage = 'ja'
-  export let autoTranslateEnabled = false
   export let notificationsEnabled = false
   export let pushSupported = false
   export let notificationsBusy = false
   export let notificationsError = ''
-  export let theme = 'auto'
+  export let pskDraft = ''
 
   const dispatch = createEventDispatcher()
 
@@ -15,16 +14,16 @@
     dispatch('voiceLanguageChange', { value: event.currentTarget.value })
   }
 
-  function toggleTranslate() {
-    dispatch('toggleTranslate')
-  }
-
   function toggleNotifications() {
     dispatch('toggleNotifications')
   }
 
-  function cycleTheme() {
-    dispatch('cycleTheme')
+  function handlePskDraftInput(event) {
+    dispatch('pskDraftChange', { value: event.currentTarget.value })
+  }
+
+  function saveKey() {
+    dispatch('saveKey')
   }
 
   function forgetKey() {
@@ -33,21 +32,11 @@
 </script>
 
 <div class="settings-panel">
-  <label for="voice-lang">Voice language</label>
+  <label for="voice-lang">Translate language</label>
   <select id="voice-lang" value={voiceLanguage} on:change={handleVoiceChange}>
-    <option value="ja">JA</option>
-    <option value="en">EN</option>
+    <option value="ja">JA / Japanese</option>
+    <option value="en">EN / English</option>
   </select>
-
-  <label for="translate-toggle">Auto-translate</label>
-  <button id="translate-toggle" type="button" class="secondary" on:click={toggleTranslate}>
-    {autoTranslateEnabled ? 'Disable auto-translate' : 'Enable auto-translate'}
-  </button>
-
-  <label for="theme-toggle">Theme</label>
-  <button id="theme-toggle" type="button" class="secondary" on:click={cycleTheme}>
-    Theme: {theme}
-  </button>
 
   <label for="notify-toggle">Notifications</label>
   <button
@@ -66,7 +55,27 @@
     <p class="error">{notificationsError}</p>
   {/if}
 
-  <button type="button" class="danger" on:click={forgetKey}>Forget Key</button>
+  <section class="psk-section">
+    <h3 class="section-heading">PSK</h3>
+    <label for="psk-update">New PSK</label>
+    <input
+      id="psk-update"
+      type="password"
+      value={pskDraft}
+      placeholder="Enter new key"
+      autocomplete="off"
+      on:input={handlePskDraftInput}
+    />
+    <button
+      type="button"
+      class="secondary"
+      disabled={!pskDraft || !pskDraft.trim()}
+      on:click={saveKey}
+    >
+      Update Key
+    </button>
+    <button type="button" class="danger" on:click={forgetKey}>Forget Key</button>
+  </section>
 </div>
 
 <style>
@@ -84,12 +93,14 @@
   }
 
   select,
+  input,
   button {
     font: inherit;
   }
 
-  select {
-    min-height: 40px;
+  select,
+  input {
+    min-height: 44px;
     border-radius: 2px;
     border: 1px solid var(--input-border);
     background: var(--input-bg);
@@ -98,7 +109,7 @@
   }
 
   button {
-    min-height: 40px;
+    min-height: 44px;
     border-radius: 2px;
     border: 1px solid var(--primary-border);
     background: var(--primary-bg);
@@ -113,6 +124,7 @@
   }
 
   button.danger {
+    min-height: 48px;
     border-color: var(--danger-border);
     background: var(--danger-bg);
     color: var(--danger-fg);
@@ -134,5 +146,21 @@
 
   .error {
     color: var(--error);
+  }
+
+  .psk-section {
+    margin-top: 0.8rem;
+    padding-top: 0.8rem;
+    border-top: 1px solid var(--card-border);
+    display: grid;
+    gap: 0.45rem;
+  }
+
+  .section-heading {
+    margin: 0;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--label);
   }
 </style>

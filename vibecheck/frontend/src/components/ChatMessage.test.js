@@ -38,7 +38,7 @@ describe('ChatMessage', () => {
     expect(screen.getByTestId('chat-message')).toHaveClass('user')
   })
 
-  it('toggles translation and caches per event id', async () => {
+  it('toggles translation on message tap and caches per event id', async () => {
     const fetchSpy = vi.fn(() =>
       Promise.resolve(
         new Response(JSON.stringify({ translated_text: 'こんにちは', source_lang: 'auto', target_lang: 'ja' }), {
@@ -54,7 +54,8 @@ describe('ChatMessage', () => {
       psk: 'dev-psk',
     })
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+    const msg = screen.getByRole('button', { name: 'Translate' })
+    await fireEvent.click(msg)
     await waitFor(() => {
       expect(screen.getByText('こんにちは')).toBeInTheDocument()
     })
@@ -68,6 +69,41 @@ describe('ChatMessage', () => {
       expect(screen.getByText('こんにちは')).toBeInTheDocument()
     })
     expect(fetchSpy).toHaveBeenCalledTimes(1)
+
+    const firstBody = fetchSpy.mock.calls[0]?.[1]?.body
+    expect(firstBody ? JSON.parse(firstBody) : null).toMatchObject({
+      text: 'Hello',
+      target_lang: 'ja',
+    })
+  })
+
+  it('uses configured translation target language', async () => {
+    const fetchSpy = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ translated_text: 'Hola', source_lang: 'auto', target_lang: 'en' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+
+    render(ChatMessage, {
+      event: { id: 'a-translate-en-1', type: 'assistant', content: 'Hello', timestamp: 1700000000 },
+      psk: 'dev-psk',
+      targetLanguage: 'en',
+    })
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+    await waitFor(() => {
+      expect(screen.getByText('Hola')).toBeInTheDocument()
+    })
+
+    const body = fetchSpy.mock.calls[0]?.[1]?.body
+    expect(body ? JSON.parse(body) : null).toMatchObject({
+      text: 'Hello',
+      target_lang: 'en',
+    })
   })
 
   it('auto-translates assistant messages when enabled', async () => {
@@ -94,13 +130,14 @@ describe('ChatMessage', () => {
     })
   })
 
-  it('skips translation toggles when content is already CJK-heavy', () => {
+  it('skips translation when content is already CJK-heavy (no button role)', () => {
     render(ChatMessage, {
       event: { id: 'a-cjk-1', type: 'assistant', content: 'こんにちは', timestamp: 1700000000 },
       psk: 'dev-psk',
     })
 
-    expect(screen.queryByRole('button', { name: 'Translate' })).not.toBeInTheDocument()
+    // Article should not have role=button when canTranslate is false
+    expect(screen.getByTestId('chat-message').getAttribute('role')).toBeNull()
   })
 
   it('aborts auto-translate fetch when the component is destroyed', async () => {
