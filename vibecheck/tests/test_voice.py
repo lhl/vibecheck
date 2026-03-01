@@ -287,6 +287,196 @@ def test_segments_duration_ms_handles_edge_cases() -> None:
     assert voice_module._segments_duration_ms([_OkEnd()]) == 420
 
 
+# ---------------------------------------------------------------------------
+# TTS / Voices tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_voices_returns_list(client, psk: str) -> None:
+    response = await client.get("/api/voice/voices", headers={"X-PSK": psk})
+    assert response.status_code == 200
+    payload = response.json()
+    assert "voices" in payload
+    assert len(payload["voices"]) > 0
+    assert all("voice_id" in v and "name" in v for v in payload["voices"])
+
+
+@pytest.mark.asyncio
+async def test_synthesize_returns_500_when_elevenlabs_key_missing(
+    client,
+    psk: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
+    response = await client.post(
+        "/api/voice/synthesize",
+        headers={"X-PSK": psk, "Content-Type": "application/json"},
+        json={"text": "hello world"},
+    )
+    assert response.status_code == 500
+    assert "ELEVENLABS_API_KEY" in response.json().get("detail", "")
+
+
+@pytest.mark.asyncio
+async def test_synthesize_rejects_empty_text(client, psk: str) -> None:
+    response = await client.post(
+        "/api/voice/synthesize",
+        headers={"X-PSK": psk, "Content-Type": "application/json"},
+        json={"text": ""},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_synthesize_rejects_whitespace_only_text(
+    client,
+    psk: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "fake-key")
+    response = await client.post(
+        "/api/voice/synthesize",
+        headers={"X-PSK": psk, "Content-Type": "application/json"},
+        json={"text": "   "},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_synthesize_streams_audio(
+    client,
+    psk: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.routes.voice as voice_module
+
+    fake_audio = b"\xff\xfb\x90\x00" * 100  # fake mp3 bytes
+
+    async def mock_open_tts_stream(*, api_key, text, voice_id):
+        class FakeResponse:
+            status_code = 200
+
+            def aiter_bytes(self):
+                return _async_iter_chunks([fake_audio])
+
+            async def aclose(self):
+                pass
+
+        class FakeClient:
+            async def aclose(self):
+                pass
+
+        return FakeClient(), FakeResponse()
+
+    async def _async_iter_chunks(chunks):
+        for chunk in chunks:
+            yield chunk
+
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "fake-key")
+    monkeypatch.setattr(voice_module, "open_tts_stream", mock_open_tts_stream)
+
+    response = await client.post(
+        "/api/voice/synthesize",
+        headers={"X-PSK": psk, "Content-Type": "application/json"},
+        json={"text": "hello world"},
+    )
+    assert response.status_code == 200
+    assert response.headers.get("content-type") == "audio/mpeg"
+    assert len(response.content) > 0
+
+
+@pytest.mark.asyncio
+async def test_synthesize_uses_custom_voice_id(
+    client,
+    psk: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.routes.voice as voice_module
+
+    captured = {}
+
+    async def mock_open_tts_stream(*, api_key, text, voice_id):
+        captured["voice_id"] = voice_id
+        captured["text"] = text
+
+        class FakeResponse:
+            status_code = 200
+
+            def aiter_bytes(self):
+                return _async_iter_chunks([b"\xff\xfb"])
+
+            async def aclose(self):
+                pass
+
+        class FakeClient:
+            async def aclose(self):
+                pass
+
+        return FakeClient(), FakeResponse()
+
+    async def _async_iter_chunks(chunks):
+        for chunk in chunks:
+            yield chunk
+
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "fake-key")
+    monkeypatch.setattr(voice_module, "open_tts_stream", mock_open_tts_stream)
+
+    response = await client.post(
+        "/api/voice/synthesize",
+        headers={"X-PSK": psk, "Content-Type": "application/json"},
+        json={"text": "konnichiwa", "voice_id": "custom-voice-123"},
+    )
+    assert response.status_code == 200
+    assert captured["voice_id"] == "custom-voice-123"
+    assert captured["text"] == "konnichiwa"
+
+
+@pytest.mark.asyncio
+async def test_synthesize_maps_upstream_auth_error(
+    client,
+    psk: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.routes.voice as voice_module
+
+    async def mock_open_tts_stream(*, api_key, text, voice_id):
+        raise voice_module._map_tts_error(401, "Unauthorized")
+
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "fake-key")
+    monkeypatch.setattr(voice_module, "open_tts_stream", mock_open_tts_stream)
+
+    response = await client.post(
+        "/api/voice/synthesize",
+        headers={"X-PSK": psk, "Content-Type": "application/json"},
+        json={"text": "hello"},
+    )
+    assert response.status_code == 502
+    assert "authentication" in response.json().get("detail", "").lower()
+
+
+@pytest.mark.asyncio
+async def test_synthesize_maps_upstream_rate_limit(
+    client,
+    psk: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import vibecheck.routes.voice as voice_module
+
+    async def mock_open_tts_stream(*, api_key, text, voice_id):
+        raise voice_module._map_tts_error(429, "Too many requests")
+
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "fake-key")
+    monkeypatch.setattr(voice_module, "open_tts_stream", mock_open_tts_stream)
+
+    response = await client.post(
+        "/api/voice/synthesize",
+        headers={"X-PSK": psk, "Content-Type": "application/json"},
+        json={"text": "hello"},
+    )
+    assert response.status_code == 429
+
+
 @pytest.mark.asyncio
 async def test_voice_transcribe_returns_504_on_upstream_timeout(
     client,

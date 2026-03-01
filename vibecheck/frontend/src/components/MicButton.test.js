@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 let recording = false
 let startDeferred = null
@@ -38,10 +38,14 @@ import { __getStopCalls, __isRecording, __setStartDeferred } from '../lib/record
 import MicButton from './MicButton.svelte'
 
 describe('MicButton', () => {
+  let nowMs = 1000
+
   beforeEach(() => {
     recording = false
     startDeferred = null
     stopCalls = 0
+    nowMs = 1000
+    vi.spyOn(Date, 'now').mockImplementation(() => nowMs)
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
@@ -55,12 +59,18 @@ describe('MicButton', () => {
     )
   })
 
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('posts audio to /api/voice/transcribe and dispatches transcribed event', async () => {
     const onTranscribed = vi.fn()
     render(MicButton, { psk: 'dev-psk', language: 'en', disabled: false, onTranscribed })
 
-    const button = screen.getByRole('button', { name: 'Hold to record' })
+    const button = screen.getByRole('button', { name: /hold to record/i })
     await fireEvent.mouseDown(button)
+    // Simulate a hold longer than the tap threshold (300ms)
+    nowMs += 500
     await fireEvent.mouseUp(button)
 
     await waitFor(() => {
@@ -81,8 +91,9 @@ describe('MicButton', () => {
 
     render(MicButton, { psk: 'dev-psk', language: 'en', disabled: false, onTranscribed: vi.fn() })
 
-    const button = screen.getByRole('button', { name: 'Hold to record' })
+    const button = screen.getByRole('button', { name: /hold to record/i })
     await fireEvent.mouseDown(button)
+    nowMs += 500
     await fireEvent.mouseUp(button)
 
     deferred.resolve()
@@ -99,8 +110,9 @@ describe('MicButton', () => {
 
     render(MicButton, { psk: 'dev-psk', language: 'en', disabled: false, onTranscribed: vi.fn() })
 
-    const button = screen.getByRole('button', { name: 'Hold to record' })
+    const button = screen.getByRole('button', { name: /hold to record/i })
     await fireEvent.touchStart(button)
+    nowMs += 500
     await fireEvent.touchCancel(button)
 
     deferred.resolve()
@@ -108,6 +120,20 @@ describe('MicButton', () => {
     await waitFor(() => {
       expect(__getStopCalls()).toBe(1)
       expect(__isRecording()).toBe(false)
+    })
+  })
+
+  it('toggles talker mode on quick tap', async () => {
+    const onTalkerToggle = vi.fn()
+    render(MicButton, { psk: 'dev-psk', language: 'en', disabled: false, onTalkerToggle })
+
+    const button = screen.getByRole('button', { name: /hold to record/i })
+    await fireEvent.mouseDown(button)
+    // Quick tap — no time advance, stays below threshold
+    await fireEvent.mouseUp(button)
+
+    await waitFor(() => {
+      expect(onTalkerToggle).toHaveBeenCalledOnce()
     })
   })
 })

@@ -5,13 +5,18 @@
   export let psk = ''
   export let language = 'ja'
   export let disabled = false
+  export let talkerActive = false
   export let onTranscribed = null
   export let onRecordingChange = null
+  export let onTalkerToggle = null
+
+  const TAP_THRESHOLD_MS = 300
 
   let isUploading = false
   let errorMessage = ''
   let startPromise = null
   let stopRequested = false
+  let pressStartedAt = 0
 
   function notifyRecording(active) {
     if (typeof onRecordingChange === 'function') {
@@ -26,6 +31,7 @@
 
     errorMessage = ''
     stopRequested = false
+    pressStartedAt = Date.now()
 
     try {
       const pending = startRecording()
@@ -49,6 +55,7 @@
       return
     }
 
+    const pressDuration = Date.now() - pressStartedAt
     stopRequested = true
     const pending = startPromise
     errorMessage = ''
@@ -63,9 +70,21 @@
     } catch (error) {
       const message = error instanceof Error ? error.message : ''
       if (message.startsWith('No recording is active')) {
+        // Short tap — toggle talker mode
+        if (pressDuration < TAP_THRESHOLD_MS && typeof onTalkerToggle === 'function') {
+          onTalkerToggle()
+        }
         return
       }
       errorMessage = message || 'Recording failed'
+      return
+    }
+
+    // Short tap with a tiny/empty blob — toggle talker mode instead of transcribing
+    if (pressDuration < TAP_THRESHOLD_MS) {
+      if (typeof onTalkerToggle === 'function') {
+        onTalkerToggle()
+      }
       return
     }
 
@@ -124,7 +143,9 @@
   }
 
   function handleMouseLeave() {
-    finish()
+    if (pressStartedAt && (Date.now() - pressStartedAt) >= TAP_THRESHOLD_MS) {
+      finish()
+    }
   }
 
   function handleTouchStart(event) {
@@ -157,7 +178,8 @@
   <button
     type="button"
     class="mic"
-    aria-label="Hold to record"
+    class:talker={talkerActive}
+    aria-label={talkerActive ? 'Tap to exit talker mode' : 'Hold to record, tap for talker mode'}
     disabled={disabled || isUploading}
     data-recording={isRecording() ? 'true' : 'false'}
     on:mousedown={handleMouseDown}
@@ -169,6 +191,13 @@
   >
     {#if isRecording()}
       <span class="rec-dot" aria-hidden="true"></span>
+    {:else if talkerActive}
+      <svg aria-hidden="true" class="mic-icon" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="1" width="6" height="12" rx="3" />
+        <path d="M5 10a7 7 0 0 0 14 0" />
+        <line x1="12" y1="17" x2="12" y2="21" />
+        <line x1="8" y1="21" x2="16" y2="21" />
+      </svg>
     {:else}
       <svg aria-hidden="true" class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="9" y="1" width="6" height="12" rx="3" />
@@ -212,6 +241,12 @@
     border-color: #ff4d4d;
     background: rgba(255, 77, 77, 0.18);
     color: #ff4d4d;
+  }
+
+  .mic.talker {
+    border-color: #fa8072;
+    background: rgba(250, 128, 114, 0.25);
+    color: #fa8072;
   }
 
   .mic-icon {

@@ -1,26 +1,58 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
+from collections.abc import AsyncIterator
 from typing import Any, Literal
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from mistralai import Mistral
 from mistralai.models.file import File
 from mistralai.models.sdkerror import SDKError
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 VOXTRAL_MODEL = "voxtral-mini-latest"
 DEFAULT_MAX_AUDIO_BYTES = 10 * 1024 * 1024
 STT_TIMEOUT_SECONDS = 30
+
+ELEVENLABS_TTS_URL_TEMPLATE = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
+DEFAULT_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"
+DEFAULT_TTS_MODEL = "eleven_multilingual_v2"
+TTS_TIMEOUT_SECONDS = 60
+
+DEFAULT_VOICES = [
+    {"voice_id": "JBFqnCBsd6RMkjVDRZzb", "name": "George", "language": "EN"},
+    {"voice_id": "EXAVITQu4vr4xnSDxMaL", "name": "Bella", "language": "EN"},
+    {"voice_id": "pNInz6obpgDQGcFmaJgB", "name": "Adam", "language": "EN"},
+    {"voice_id": "B8gJV1IhpuegLxdpXFOE", "name": "Kuon", "language": "JP"},
+    {"voice_id": "j210dv0vWm7fCknyQpbA", "name": "Hinata", "language": "JP"},
+    {"voice_id": "3JDquces8E8bkmvbh6Bc", "name": "Otani", "language": "JP"},
+]
 
 
 class VoiceTranscriptionResponse(BaseModel):
     text: str
     language: str
     duration_ms: int = Field(ge=0)
+
+
+class TTSSynthesizeRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=5000)
+    voice_id: str | None = None
+
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("text must not be empty")
+        return cleaned
 
 
 def get_mistral_client() -> Mistral:
@@ -177,3 +209,111 @@ async def transcribe(
         language=language,
         duration_ms=duration_ms,
     )
+
+
+# ---------------------------------------------------------------------------
+# TTS (ElevenLabs proxy)
+# ---------------------------------------------------------------------------
+
+
+def _get_elevenlabs_api_key() -> str:
+    api_key = os.environ.get("ELEVENLABS_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="ELEVENLABS_API_KEY is not set")
+    return api_key
+
+
+def _map_tts_error(status_code: int, detail: str) -> HTTPException:
+    if status_code in {401, 402, 403}:
+        return HTTPException(status_code=502, detail="TTS authentication or quota failure")
+    if status_code == 429:
+        return HTTPException(status_code=429, detail="TTS rate limited")
+    if status_code >= 500:
+        return HTTPException(status_code=502, detail="TTS upstream unavailable")
+    return HTTPException(status_code=400, detail=f"TTS request failed: {detail}")
+
+
+async def open_tts_stream(
+    *, api_key: str, text: str, voice_id: str
+) -> tuple[httpx.AsyncClient, httpx.Response]:
+    url = ELEVENLABS_TTS_URL_TEMPLATE.format(voice_id=voice_id)
+    headers = {
+        "xi-api-key": api_key,
+        "Accept": "audio/mpeg",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "text": text,
+        "model_id": DEFAULT_TTS_MODEL,
+        "voice_settings": {"stability": 0.45, "similarity_boost": 0.75},
+    }
+
+    http_client = httpx.AsyncClient(timeout=TTS_TIMEOUT_SECONDS)
+    try:
+        request = http_client.build_request("POST", url, headers=headers, json=payload)
+        response = await http_client.send(request, stream=True)
+    except httpx.HTTPError as error:
+        await http_client.aclose()
+        raise _map_tts_error(502, f"TTS upstream transport error: {error}") from error
+
+    if response.status_code >= 400:
+        body = (await response.aread()).decode("utf-8", errors="ignore").strip()
+        await response.aclose()
+        await http_client.aclose()
+        raise _map_tts_error(response.status_code, body or "unknown TTS upstream error")
+
+    return http_client, response
+
+
+@router.get("/api/voice/voices")
+async def list_voices() -> dict[str, list[dict[str, str]]]:
+    return {"voices": DEFAULT_VOICES}
+
+
+@router.post("/api/voice/synthesize")
+async def synthesize(body: TTSSynthesizeRequest) -> StreamingResponse:
+    api_key = _get_elevenlabs_api_key()
+    voice_id = body.voice_id or os.environ.get("ELEVENLABS_DEFAULT_VOICE_ID", DEFAULT_VOICE_ID)
+
+    try:
+        http_client, upstream_response = await open_tts_stream(
+            api_key=api_key, text=body.text, voice_id=voice_id
+        )
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f"TTS upstream error: {error}") from error
+
+    upstream_stream = upstream_response.aiter_bytes()
+
+    # Read first chunk to verify non-empty response before committing to streaming
+    first_chunk = b""
+    try:
+        async for chunk in upstream_stream:
+            if chunk:
+                first_chunk = chunk
+                break
+    except (httpx.HTTPError, httpx.StreamError) as error:
+        await upstream_response.aclose()
+        await http_client.aclose()
+        raise HTTPException(status_code=502, detail=f"TTS upstream read failed: {error}") from error
+
+    if not first_chunk:
+        await upstream_response.aclose()
+        await http_client.aclose()
+        raise HTTPException(status_code=502, detail="TTS upstream returned empty audio")
+
+    async def stream_body() -> AsyncIterator[bytes]:
+        try:
+            yield first_chunk
+            async for chunk in upstream_stream:
+                if chunk:
+                    yield chunk
+        except (httpx.HTTPError, httpx.StreamError) as error:
+            logger.exception("TTS stream interrupted mid-response")
+            raise RuntimeError("TTS stream interrupted mid-response") from error
+        finally:
+            await upstream_response.aclose()
+            await http_client.aclose()
+
+    return StreamingResponse(stream_body(), media_type="audio/mpeg")

@@ -43,6 +43,7 @@
   const initialSessionId = query.get('sid') || query.get('session_id') || ''
   const initialAction = query.get('action') || ''
   const initialCallId = query.get('call_id') || ''
+  const initialNotificationSource = query.get('notif_source') || ''
 
   let psk = loadInitialPsk()
   let pskDraft = psk
@@ -64,9 +65,15 @@
   let theme = loadThemePreference()
   let sessionPickerOpen = true
   let settingsOpen = false
+  let talkerActive = false
+  let talkerState = 'idle'
+  let talkerAudio = null
 
   const EVENT_CACHE_PREFIX = 'vibecheck_events_'
   const EVENT_CACHE_LIMIT = 50
+  const NOTIFICATION_TRACE_KEY = 'vibecheck_notification_trace'
+  const NOTIFICATION_TRACE_CONSOLE_KEY = 'vibecheck_notification_trace_console'
+  const NOTIFICATION_TRACE_LIMIT = 100
   let cacheWriteTimer = null
   let lastHapticCallId = ''
 
@@ -168,6 +175,44 @@
     return `${EVENT_CACHE_PREFIX}${sessionId}`
   }
 
+  function loadNotificationTrace() {
+    try {
+      const raw = window.localStorage.getItem(NOTIFICATION_TRACE_KEY)
+      if (!raw) {
+        return []
+      }
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+
+  function persistNotificationTrace(entries) {
+    try {
+      const bounded = entries.slice(Math.max(0, entries.length - NOTIFICATION_TRACE_LIMIT))
+      window.localStorage.setItem(NOTIFICATION_TRACE_KEY, JSON.stringify(bounded))
+    } catch {
+      // no-op
+    }
+  }
+
+  function recordNotificationTrace(step, details = {}) {
+    const entry = {
+      step,
+      ts: new Date().toISOString(),
+      ...details,
+    }
+    persistNotificationTrace([...loadNotificationTrace(), entry])
+    try {
+      if (window.localStorage.getItem(NOTIFICATION_TRACE_CONSOLE_KEY) === '1') {
+        console.info('[vibecheck:notification]', entry)
+      }
+    } catch {
+      // no-op
+    }
+  }
+
   function loadCachedEvents(sessionId) {
     if (!sessionId) {
       return []
@@ -252,18 +297,47 @@
     }
   }
 
-  async function handleNotificationAction(action, url, callIdHint) {
+  function notificationSourceFromUrl(url) {
+    if (!url) {
+      return ''
+    }
+    try {
+      const parsed = new URL(url, window.location.origin)
+      return parsed.searchParams.get('notif_source') || ''
+    } catch {
+      return ''
+    }
+  }
+
+  async function handleNotificationAction(action, url, callIdHint, sourceHint = '') {
     const normalized = typeof action === 'string' ? action.trim().toLowerCase() : ''
+    const source =
+      (typeof sourceHint === 'string' && sourceHint.trim()) || notificationSourceFromUrl(url) || 'unknown'
+    recordNotificationTrace('received', {
+      action: normalized || '(empty)',
+      source,
+      has_url: Boolean(url),
+      has_call_id_hint: Boolean(callIdHint),
+    })
+
     if (normalized !== 'approve' && normalized !== 'deny') {
+      recordNotificationTrace('skip_invalid_action', { action: normalized || '(empty)', source })
       return
     }
 
     if (!psk || notificationActionBusy) {
+      recordNotificationTrace('skip_busy_or_no_psk', {
+        action: normalized,
+        source,
+        has_psk: Boolean(psk),
+        busy: notificationActionBusy,
+      })
       return
     }
 
     const targetSessionId = sessionIdFromUrl(url) || sessionId
     if (!targetSessionId) {
+      recordNotificationTrace('skip_missing_session', { action: normalized, source })
       return
     }
 
@@ -274,6 +348,11 @@
         storeSessionId(targetSessionId)
         connectSocket()
       }
+      recordNotificationTrace('resolved_session', {
+        action: normalized,
+        source,
+        session_id: targetSessionId,
+      })
 
       // Prefer the call_id bound to the notification; fall back to current pending only if absent
       let callId = (typeof callIdHint === 'string' && callIdHint) || callIdFromUrl(url) || ''
@@ -282,29 +361,59 @@
         callId = state?.pending_approval?.call_id || ''
       }
       if (!callId) {
+        recordNotificationTrace('skip_missing_call_id', {
+          action: normalized,
+          source,
+          session_id: targetSessionId,
+        })
         return
       }
 
       const approved = normalized === 'approve'
+      recordNotificationTrace('approve_request', {
+        action: normalized,
+        source,
+        session_id: targetSessionId,
+        call_id: callId,
+        approved,
+      })
       await apiJson(`/api/sessions/${encodeURIComponent(targetSessionId)}/approve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Vibecheck-Notification-Action': normalized,
+          'X-Vibecheck-Notification-Source': source,
+        },
         body: JSON.stringify({ call_id: callId, approved }),
       })
 
-      handleApprovalResolved(callId, approved)
+      handleApprovalResolved(callId, approved, `notification:${source}`)
+      recordNotificationTrace('approve_ok', {
+        action: normalized,
+        source,
+        session_id: targetSessionId,
+        call_id: callId,
+        approved,
+      })
 
       if (typeof url === 'string' && url && url.includes('action=')) {
         try {
           const parsed = new URL(url, window.location.origin)
           parsed.searchParams.delete('action')
           parsed.searchParams.delete('call_id')
+          parsed.searchParams.delete('notif_source')
           window.history.replaceState({}, '', parsed.pathname + parsed.search)
         } catch {
           // no-op
         }
       }
-    } catch {
+    } catch (error) {
+      recordNotificationTrace('approve_error', {
+        action: normalized,
+        source,
+        session_id: targetSessionId,
+        error: error instanceof Error ? error.message : String(error),
+      })
       // best-effort: action buttons should never block opening the app
     } finally {
       notificationActionBusy = false
@@ -479,6 +588,120 @@
     storeThemePreference(theme)
   }
 
+  // ---------------------------------------------------------------------------
+  // Talker mode
+  // ---------------------------------------------------------------------------
+
+  function toggleTalker() {
+    talkerActive = !talkerActive
+    if (talkerActive) {
+      talkerState = 'listening'
+    } else {
+      talkerState = 'idle'
+      stopTalkerAudio()
+    }
+  }
+
+  function stopTalkerAudio() {
+    if (talkerAudio) {
+      try {
+        talkerAudio.pause()
+        talkerAudio.src = ''
+      } catch {
+        // no-op
+      }
+      talkerAudio = null
+    }
+  }
+
+  async function talkerSpeak(text) {
+    if (!talkerActive || !text) {
+      talkerState = 'listening'
+      return
+    }
+
+    talkerState = 'speaking'
+    stopTalkerAudio()
+
+    try {
+      const response = await fetch('/api/voice/synthesize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(psk ? { 'X-PSK': psk } : {}),
+        },
+        body: JSON.stringify({ text }),
+      })
+
+      if (!response.ok) {
+        console.warn('[talker] TTS failed:', response.status)
+        talkerState = 'listening'
+        return
+      }
+
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      talkerAudio = audio
+
+      audio.onended = () => {
+        URL.revokeObjectURL(url)
+        talkerAudio = null
+        if (talkerActive) {
+          talkerState = 'listening'
+        }
+      }
+
+      audio.onerror = () => {
+        URL.revokeObjectURL(url)
+        talkerAudio = null
+        if (talkerActive) {
+          talkerState = 'listening'
+        }
+      }
+
+      await audio.play()
+    } catch (error) {
+      console.warn('[talker] TTS error:', error)
+      if (talkerActive) {
+        talkerState = 'listening'
+      }
+    }
+  }
+
+  // Watch agent state for completion while talker mode is running
+  // When state transitions to idle/waiting, grab last assistant message and speak it
+  let talkerPrevAgentState = ''
+  $: {
+    const currentAgentState = latestState?.state || 'unknown'
+    if (talkerActive && talkerState === 'running') {
+      const wasActive = talkerPrevAgentState === 'running' || talkerPrevAgentState === 'tool_running'
+      const isNowIdle = currentAgentState === 'idle' || currentAgentState === 'waiting_input' || currentAgentState === 'waiting_approval'
+      if (wasActive && isNowIdle) {
+        const assistantEvents = timeline.filter((e) => e.type === 'assistant')
+        if (assistantEvents.length > 0) {
+          const latest = assistantEvents[assistantEvents.length - 1]
+          const content = typeof latest?.content === 'string' ? latest.content.trim() : ''
+          if (content) {
+            talkerSpeak(content)
+          } else {
+            talkerState = 'listening'
+          }
+        } else {
+          talkerState = 'listening'
+        }
+      }
+    }
+    talkerPrevAgentState = currentAgentState
+  }
+
+  function handleTalkerSubmitted(info) {
+    handleSubmitted(info)
+    if (talkerActive) {
+      talkerState = 'running'
+    }
+  }
+
   function toggleSessionPicker() {
     sessionPickerOpen = !sessionPickerOpen
   }
@@ -541,7 +764,7 @@
     showNewMessages = false
   }
 
-  function handleApprovalResolved(callId, approved) {
+  function handleApprovalResolved(callId, approved, source = 'pwa_ui') {
     appendEvent({
       type: 'approval_resolution',
       id: buildEventId('approval-resolution-local'),
@@ -549,6 +772,7 @@
       call_id: callId,
       approved,
       edited_args: null,
+      source,
     })
   }
 
@@ -580,12 +804,26 @@
   })
 
   onMount(() => {
+    if (window) {
+      window.__vibecheckNotificationTrace = {
+        dump: () => loadNotificationTrace(),
+        clear: () => persistNotificationTrace([]),
+        enableConsole: () => window.localStorage.setItem(NOTIFICATION_TRACE_CONSOLE_KEY, '1'),
+        disableConsole: () => window.localStorage.removeItem(NOTIFICATION_TRACE_CONSOLE_KEY),
+      }
+    }
+
     const messageHandler = (event) => {
       const payload = event?.data
       if (!payload || payload.type !== 'notification_action') {
         return
       }
-      handleNotificationAction(payload.action, payload.url, payload.call_id)
+      handleNotificationAction(
+        payload.action,
+        payload.url,
+        payload.call_id,
+        typeof payload.source === 'string' ? payload.source : 'window_message',
+      )
     }
 
     const serviceWorkerTarget = navigator?.serviceWorker
@@ -597,7 +835,12 @@
     if (psk) {
       ;(async () => {
         try {
-          await handleNotificationAction(initialAction, window.location.href, initialCallId)
+          await handleNotificationAction(
+            initialAction,
+            window.location.href,
+            initialCallId,
+            initialNotificationSource || 'url_query',
+          )
           await refreshSessions()
           startRefreshTimer()
 
@@ -615,12 +858,16 @@
         serviceWorkerTarget.removeEventListener('message', messageHandler)
       }
       window.removeEventListener('message', messageHandler)
+      if (window?.__vibecheckNotificationTrace) {
+        delete window.__vibecheckNotificationTrace
+      }
     }
   })
 
   onDestroy(() => {
     stopRefreshTimer()
     disconnectSocket()
+    stopTalkerAudio()
     if (cacheWriteTimer) {
       clearTimeout(cacheWriteTimer)
       cacheWriteTimer = null
@@ -706,9 +953,12 @@
         {sessionId}
         {psk}
         {voiceLanguage}
+        {talkerActive}
+        {talkerState}
         pendingInput={$pendingInput}
         connectionStatus={$connection.status}
-        onSubmitted={handleSubmitted}
+        onSubmitted={talkerActive ? handleTalkerSubmitted : handleSubmitted}
+        onTalkerToggle={toggleTalker}
       />
     </footer>
 
