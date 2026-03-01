@@ -108,6 +108,19 @@ npm run dev  # verify port responds
 npm test
 ```
 
+### Frontend Deploy
+
+Vite builds into `vibecheck/static/` which FastAPI serves directly. **After any frontend change, you must rebuild and restart the server** for the change to be live:
+
+```bash
+cd vibecheck/frontend && npm run build   # outputs to ../static/
+# Then restart the server (kill and re-run):
+uv run vibecheck-vibe                    # recommended: Vibe TUI + bridge
+# or: uv run python -m vibecheck        # server-only bridge
+```
+
+Without the rebuild, the server continues serving stale cached bundles. The build produces hashed filenames (e.g. `index-BHv5LYMU.css`) so the old files won't match.
+
 ### Prototype Tests
 
 Each prototype has a `test.sh`:
