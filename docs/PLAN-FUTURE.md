@@ -2,6 +2,39 @@
 
 This document captures legitimate follow-ups identified during Phase 7 session work (WU-23/WU-24: session picker + resume/diffs). These items are intentionally **out of scope for the hackathon deliverable**, but worth tracking for a production-hardening pass.
 
+## P1 — Turn cancellation semantics + UX (deferred)
+
+- **Decision:** Defer the Send/Cancel toggle and `/api/sessions/{id}/cancel` endpoint until we need stronger interruption guarantees or true token-stream UX.
+- **Why defer now:**
+  - We already stream events to the PWA over WebSocket, but managed turns are started with `enable_streaming=False`, so we are not exposing token-by-token assistant streaming to the client.
+  - The bridge suppresses chunk-style assistant events when message observer wiring is active, so there is no visible partial-token stream for the user to stop mid-output.
+  - A naive cancel implementation looks simple but has lifecycle edge cases (pending approval/input futures, local callback tasks, queue drain, and state consistency).
+- **Current implication:** Cancel is not a critical UX requirement for "stop visible stream" right now, but remains a valid future control for long or hung turns.
+
+### When we pick this up
+
+- **Backend scope:**
+  - Add `SessionBridge.cancel_turn()` with explicit, tested behavior:
+    - cancel active turn worker task,
+    - settle/cancel pending approval and input paths safely,
+    - drain queued messages for the current turn policy,
+    - transition bridge state to `idle` and broadcast state change.
+  - Add `POST /api/sessions/{session_id}/cancel` (PSK-protected).
+- **Frontend scope:**
+  - InputBar Send/Cancel toggle based on agent state (`running` => Cancel).
+  - Ensure keyboard and voice-submit paths are cancel-aware (not just button label swap).
+  - Handle pending approval/input UI cleanup semantics on cancel.
+- **Test scope:**
+  - API coverage for cancel endpoint: idle no-op, running cancel, unknown session, PSK enforcement.
+  - Bridge-level cancellation tests: worker cancellation, pending cleanup, queue behavior, and state event correctness.
+  - Frontend tests for render toggle and cancel request behavior.
+
+### Design constraints to decide first
+
+- **Soft vs hard cancel contract:** `asyncio` cancellation is cooperative; it does not guarantee immediate termination of blocking tool operations or external subprocesses.
+- **"Anywhere/anytime full cancel" requires runtime support:** true hard-interrupt semantics likely need deeper Vibe/tool-runner integration beyond bridge task cancellation.
+- **Queue policy:** define whether cancel drops only the active turn or also clears queued turns.
+
 ## P1 — Session resume “atomic switch” semantics (failure paths)
 
 - **Problem:** If `/api/sessions/{id}/resume` succeeds but the subsequent `/api/sessions` refresh fails (or remains stale), the frontend can remain connected to the prior session’s WebSocket while `sessionId` changes. Any resume backlog then risks being merged into the wrong timeline.

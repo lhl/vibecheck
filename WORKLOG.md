@@ -1,5 +1,16 @@
 # vibecheck — Worklog
 
+## 2026-03-01
+
+### Scope decision: defer cancellation feature to future work
+
+- Deferred implementation of Send/Cancel toggle and `POST /api/sessions/{session_id}/cancel` from current hackathon scope.
+- Added a dedicated deferred-work section in `docs/PLAN-FUTURE.md`:
+  - documented current behavior (WebSocket event streaming exists, but managed runs are not token-streamed to client),
+  - captured why cancellation is lower priority right now for UX,
+  - outlined future backend/frontend/test scope for a robust cancel feature,
+  - called out soft-cancel vs hard-cancel constraints and required runtime/tooling decisions.
+
 ## 2026-02-28
 
 ### Phase 7 planning + UI design spec
