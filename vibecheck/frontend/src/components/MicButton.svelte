@@ -7,36 +7,10 @@
   export let disabled = false
   export let onTranscribed = null
 
-  let recordingStartedAt = 0
-  let elapsedLabel = '0.0s'
-  let intervalId = null
   let isUploading = false
   let errorMessage = ''
   let startPromise = null
   let stopRequested = false
-
-  function updateElapsed() {
-    if (!recordingStartedAt) {
-      elapsedLabel = '0.0s'
-      return
-    }
-    elapsedLabel = `${((Date.now() - recordingStartedAt) / 1000).toFixed(1)}s`
-  }
-
-  function startTimer() {
-    if (intervalId) {
-      return
-    }
-    intervalId = setInterval(updateElapsed, 100)
-  }
-
-  function stopTimer() {
-    if (!intervalId) {
-      return
-    }
-    clearInterval(intervalId)
-    intervalId = null
-  }
 
   async function begin() {
     if (disabled || isUploading || startPromise || isRecording()) {
@@ -44,8 +18,6 @@
     }
 
     errorMessage = ''
-    recordingStartedAt = 0
-    elapsedLabel = '0.0s'
     stopRequested = false
 
     try {
@@ -55,9 +27,6 @@
       if (stopRequested) {
         return
       }
-      recordingStartedAt = Date.now()
-      updateElapsed()
-      startTimer()
     } catch (error) {
       if (!stopRequested) {
         errorMessage = error instanceof Error ? error.message : 'Recording failed'
@@ -74,9 +43,6 @@
 
     stopRequested = true
     const pending = startPromise
-
-    stopTimer()
-    updateElapsed()
     errorMessage = ''
 
     let blob = null
@@ -135,8 +101,6 @@
       errorMessage = error instanceof Error ? error.message : 'Transcription failed'
     } finally {
       isUploading = false
-      recordingStartedAt = 0
-      elapsedLabel = '0.0s'
     }
   }
 
@@ -170,8 +134,6 @@
   }
 
   onDestroy(() => {
-    stopTimer()
-    // Release mic/tracks if still recording when component unmounts
     if (isRecording()) {
       try {
         stopRecording()
@@ -196,8 +158,16 @@
     on:touchend={handleTouchEnd}
     on:touchcancel={handleTouchCancel}
   >
-    <span class="dot" aria-hidden="true"></span>
-    <span class="timer" aria-hidden="true">{elapsedLabel}</span>
+    {#if isRecording()}
+      <span class="rec-dot" aria-hidden="true"></span>
+    {:else}
+      <svg aria-hidden="true" class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="1" width="6" height="12" rx="3" />
+        <path d="M5 10a7 7 0 0 0 14 0" />
+        <line x1="12" y1="17" x2="12" y2="21" />
+        <line x1="8" y1="21" x2="16" y2="21" />
+      </svg>
+    {/if}
   </button>
   {#if errorMessage}
     <p class="error">{errorMessage}</p>
@@ -213,41 +183,38 @@
 
   .mic {
     display: grid;
-    grid-auto-flow: column;
-    gap: 0.4rem;
-    align-items: center;
-    justify-content: center;
-    min-height: 42px;
-    min-width: 88px;
-    padding: 0 0.7rem;
+    place-items: center;
+    width: 44px;
+    height: 42px;
+    padding: 0;
     border-radius: 2px;
-    border: 1px solid #6d4a4a;
-    background: #241416;
-    color: #ffd8d8;
-    font-weight: 800;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: transparent;
+    color: var(--text-muted, #888);
     user-select: none;
     touch-action: manipulation;
   }
 
   .mic:disabled {
-    opacity: 0.55;
+    opacity: 0.4;
   }
 
-  .dot {
-    width: 10px;
-    height: 10px;
+  .mic[data-recording='true'] {
+    border-color: #ff4d4d;
+    background: rgba(255, 77, 77, 0.1);
+  }
+
+  .mic-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .rec-dot {
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
-    background: #6b707d;
-  }
-
-  .mic[data-recording='true'] .dot {
     background: #ff4d4d;
     animation: pulse 0.9s infinite;
-  }
-
-  .timer {
-    font-size: 0.75rem;
-    letter-spacing: 0.03em;
   }
 
   .error {
