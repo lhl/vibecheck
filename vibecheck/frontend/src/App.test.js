@@ -135,23 +135,13 @@ describe('App phase 4 shell', () => {
     expect(screen.queryByRole('button', { name: /Theme:/ })).not.toBeInTheDocument()
   })
 
-  it('requires confirmation before forgetting PSK', async () => {
+  it('hides the forget key control in settings', async () => {
     localStorage.setItem('vibecheck_psk', 'dev-psk')
-    const confirmSpy = vi.fn(() => false)
-    vi.stubGlobal('confirm', confirmSpy)
 
     render(App)
     await openSettings()
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Forget Key' }))
-    expect(confirmSpy).toHaveBeenCalled()
-    expect(localStorage.getItem('vibecheck_psk')).toBe('dev-psk')
-    expect(screen.queryByRole('heading', { name: 'Enter PSK' })).not.toBeInTheDocument()
-
-    confirmSpy.mockReturnValue(true)
-    await fireEvent.click(screen.getByRole('button', { name: 'Forget Key' }))
-    expect(localStorage.getItem('vibecheck_psk')).toBeNull()
-    expect(await screen.findByRole('heading', { name: 'Enter PSK' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Forget Key' })).not.toBeInTheDocument()
   })
 
   it('allows changing the PSK from settings using a password field', async () => {
@@ -160,9 +150,12 @@ describe('App phase 4 shell', () => {
     render(App)
     await openSettings()
 
-    const input = screen.getByLabelText('New PSK')
+    const input = screen.getByLabelText('PSK')
+    expect(input).toHaveValue('dev-psk')
+    expect(screen.queryByRole('button', { name: 'Update Key' })).not.toBeInTheDocument()
+
     await fireEvent.input(input, { target: { value: 'next-psk' } })
-    await fireEvent.click(screen.getByRole('button', { name: 'Update Key' }))
+    await fireEvent.change(input, { target: { value: 'next-psk' } })
 
     expect(localStorage.getItem('vibecheck_psk')).toBe('next-psk')
     expect(screen.queryByRole('heading', { name: 'Enter PSK' })).not.toBeInTheDocument()

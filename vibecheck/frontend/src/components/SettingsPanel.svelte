@@ -56,25 +56,17 @@
   {/if}
 
   <section class="psk-section">
-    <h3 class="section-heading">PSK</h3>
-    <label for="psk-update">New PSK</label>
+    <label for="psk-update">PSK</label>
     <input
       id="psk-update"
       type="password"
       value={pskDraft}
-      placeholder="Enter new key"
-      autocomplete="off"
+      placeholder="PSK"
+      autocomplete="current-password"
       on:input={handlePskDraftInput}
+      on:change={saveKey}
     />
-    <button
-      type="button"
-      class="secondary"
-      disabled={!pskDraft || !pskDraft.trim()}
-      on:click={saveKey}
-    >
-      Update Key
-    </button>
-    <button type="button" class="danger" on:click={forgetKey}>Forget Key</button>
+    <button type="button" class="danger" hidden on:click={forgetKey}>Forget Key</button>
   </section>
 </div>
 
@@ -156,11 +148,4 @@
     gap: 0.45rem;
   }
 
-  .section-heading {
-    margin: 0;
-    font-size: 0.74rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--label);
-  }
 </style>
