@@ -781,12 +781,17 @@
     --session-status-idle: #555;
   }
 
+  :global(html), :global(body) {
+    height: 100%;
+    overflow: hidden;
+  }
+
   :global(body) {
     margin: 0;
-    min-height: 100%;
     background: var(--bg);
     color: var(--fg);
     font-family: 'JetBrains Mono', monospace;
+    overscroll-behavior: none;
   }
 
   .psk-gate {
@@ -850,6 +855,11 @@
     height: 100dvh;
     margin: 0 auto;
     width: min(100%, 600px);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    box-sizing: border-box;
   }
 
   .timeline-wrap {
