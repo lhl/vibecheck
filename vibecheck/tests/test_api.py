@@ -86,7 +86,7 @@ async def test_state_and_detail_endpoints(api_client) -> None:
 @pytest.mark.asyncio
 async def test_auto_approve_toggle_endpoint_updates_bridge_state(api_client) -> None:
     client, manager = api_client
-    manager.attach("session-a")
+    bridge = manager.attach("session-a", attach_mode="managed")
 
     enabled_response = await client.post(
         "/api/sessions/session-a/auto-approve",
@@ -107,6 +107,44 @@ async def test_auto_approve_toggle_endpoint_updates_bridge_state(api_client) -> 
     )
     assert disabled_response.status_code == 200
     assert disabled_response.json() == {"status": "ok", "auto_approve": False}
+
+
+@pytest.mark.asyncio
+async def test_auto_approve_rejects_observe_only_session(api_client) -> None:
+    client, manager = api_client
+    manager.attach("session-a")  # defaults to observe_only for discovered sessions
+
+    response = await client.post(
+        "/api/sessions/session-a/auto-approve",
+        headers={"X-PSK": "dev-psk"},
+        json={"enabled": True},
+    )
+    assert response.status_code == 403
+    assert "not controllable" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_auto_approve_with_pending_drains_via_endpoint(api_client) -> None:
+    client, manager = api_client
+    bridge = manager.attach("session-a", attach_mode="managed")
+
+    future: asyncio.Future = asyncio.get_running_loop().create_future()
+    bridge.pending_approval["tc-ep"] = future
+    bridge.pending_approval_context["tc-ep"] = {"tool_name": "bash", "args": {"command": "ls"}}
+    bridge.state = "waiting_approval"
+
+    response = await client.post(
+        "/api/sessions/session-a/auto-approve",
+        headers={"X-PSK": "dev-psk"},
+        json={"enabled": True},
+    )
+    assert response.status_code == 200
+    assert response.json()["auto_approve"] is True
+
+    assert future.done()
+    assert await future == {"approved": True, "edited_args": None}
+    assert bridge.pending_approval == {}
+    assert bridge.state == "running"
 
 
 @pytest.mark.asyncio
