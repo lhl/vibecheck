@@ -164,6 +164,33 @@
   - `uv run pytest vibecheck/tests/ -v` -> pass (`157` tests).
   - `cd vibecheck/frontend && npm run build` -> pass.
 
+### L8 vision composer follow-up: camera-only attachment state machine
+
+- Refined `InputBar` image UX to camera-only flow:
+  - removed upload/gallery quick action from composer UI,
+  - kept a single camera trigger wired to `take-photo` hidden input.
+- Added camera button processing states:
+  - `processing` shows spinner in button while `/api/vision` is in flight,
+  - `ready` shows green success state after caption extraction succeeds.
+- Moved camera control to floating position:
+  - camera button is absolutely positioned above the composer and visually aligned above the mic button.
+  - button visibility is contextual: shown on textarea focus and persists while an image caption is pending/ready.
+- Changed caption handling to avoid polluting user draft text:
+  - caption is stored in a hidden field (`attached-image-caption`) in component state/UI,
+  - caption is no longer inserted into textarea value.
+- Updated submit behavior:
+  - on normal message sends, automatically appends:
+    - `ATTACHED IMAGE:` block with caption text at the end of `content`,
+  - preserves free-form user draft editing in the textarea,
+  - clears attached caption and camera state after successful send.
+- Updated frontend tests in `vibecheck/frontend/src/components/InputBar.test.js`:
+  - asserts camera-only focus behavior,
+  - asserts spinner + ready states,
+  - asserts `ATTACHED IMAGE:` block is appended in submit payload while textarea remains user-authored.
+- Verification:
+  - `cd vibecheck/frontend && npm test -- src/components/InputBar.test.js` -> pass.
+  - `cd vibecheck/frontend && npm run build` -> pass.
+
 ## 2026-02-28
 
 ### Phase 7 planning + UI design spec

@@ -21,14 +21,15 @@
   let textareaEl = null
   let recording = false
   let textareaFocused = false
-  let visionBusy = false
+  let cameraState = 'idle'
+  let attachedImageCaption = ''
   let takePhotoInputEl = null
-  let uploadImageInputEl = null
 
   $: isConnected = connectionStatus === 'connected'
   $: isDisabled = !isConnected || !sessionId || isSubmitting
   $: placeholder = pendingInput ? 'Answer the question...' : 'Send a message...'
-  $: showVisionActions = textareaFocused && !talkerActive
+  $: showCameraAction = !talkerActive && (textareaFocused || cameraState !== 'idle')
+  $: cameraBusy = cameraState === 'processing'
 
   $: talkerLabel = (() => {
     switch (talkerState) {
@@ -64,7 +65,13 @@
   }
 
   async function submit() {
-    const text = value.trim()
+    const draft = value.trim()
+    const attachedImageBlock = attachedImageCaption ? `ATTACHED IMAGE:\n${attachedImageCaption}` : ''
+    const text = pendingInput
+      ? draft
+      : attachedImageBlock
+        ? (draft ? `${draft}\n\n${attachedImageBlock}` : attachedImageBlock)
+        : draft
     if (!text || isDisabled) {
       return
     }
@@ -108,6 +115,8 @@
       }
 
       value = ''
+      attachedImageCaption = ''
+      cameraState = 'idle'
       tick().then(autoResize)
       if (typeof onSubmitted === 'function') {
         onSubmitted({ endpoint, payload })
@@ -140,17 +149,10 @@
   }
 
   function launchTakePhotoPicker() {
-    if (isDisabled || visionBusy || !showVisionActions) {
+    if (isDisabled || cameraBusy || !showCameraAction) {
       return
     }
     takePhotoInputEl?.click()
-  }
-
-  function launchUploadImagePicker() {
-    if (isDisabled || visionBusy || !showVisionActions) {
-      return
-    }
-    uploadImageInputEl?.click()
   }
 
   function validateImageFile(file) {
@@ -188,10 +190,12 @@
     const validationError = validateImageFile(file)
     if (validationError) {
       errorMessage = validationError
+      attachedImageCaption = ''
+      cameraState = 'idle'
       return
     }
 
-    visionBusy = true
+    cameraState = 'processing'
     errorMessage = ''
 
     try {
@@ -215,16 +219,12 @@
       if (!text) {
         throw new Error('Vision response did not include description text.')
       }
-
-      const contextLine = `Image context: ${text}`
-      const base = value.trim()
-      value = base ? `${base}\n${contextLine}` : contextLine
-      await tick()
-      autoResize()
+      attachedImageCaption = text
+      cameraState = 'ready'
     } catch (error) {
+      attachedImageCaption = ''
+      cameraState = 'idle'
       errorMessage = error instanceof Error ? error.message : 'Vision request failed'
-    } finally {
-      visionBusy = false
     }
   }
 
@@ -262,32 +262,30 @@
   </div>
 {:else}
   <div class="input-bar" class:recording>
-    <div class="left-stack">
-      {#if showVisionActions}
-        <div class="vision-actions">
-          <button
-            type="button"
-            class="vision-button"
-            aria-label="Take photo"
-            disabled={isDisabled || visionBusy}
-            on:pointerdown|preventDefault
-            on:click={launchTakePhotoPicker}
-          >
-            Cam
-          </button>
-          <button
-            type="button"
-            class="vision-button"
-            aria-label="Upload image"
-            disabled={isDisabled || visionBusy}
-            on:pointerdown|preventDefault
-            on:click={launchUploadImagePicker}
-          >
-            Img
-          </button>
-        </div>
-      {/if}
+    {#if showCameraAction}
+      <button
+        type="button"
+        class="camera-button"
+        class:processing={cameraState === 'processing'}
+        class:ready={cameraState === 'ready'}
+        data-state={cameraState}
+        aria-label={cameraState === 'processing' ? 'Processing image' : cameraState === 'ready' ? 'Attached image ready' : 'Take photo'}
+        disabled={isDisabled || cameraBusy}
+        on:pointerdown|preventDefault
+        on:click={launchTakePhotoPicker}
+      >
+        {#if cameraState === 'processing'}
+          <span class="camera-spinner" data-testid="camera-spinner" aria-hidden="true"></span>
+        {:else if cameraState === 'ready'}
+          Cam ✓
+        {:else}
+          Cam
+        {/if}
+      </button>
+    {/if}
 
+    <input type="hidden" value={attachedImageCaption} data-testid="attached-image-caption" />
+    <div class="left-stack">
       <input
         class="hidden-file-input"
         bind:this={takePhotoInputEl}
@@ -295,16 +293,6 @@
         accept="image/*"
         capture="environment"
         data-testid="take-photo-input"
-        aria-hidden="true"
-        tabindex="-1"
-        on:change={handleVisionFileChange}
-      />
-      <input
-        class="hidden-file-input"
-        bind:this={uploadImageInputEl}
-        type="file"
-        accept="image/*"
-        data-testid="upload-image-input"
         aria-hidden="true"
         tabindex="-1"
         on:change={handleVisionFileChange}
@@ -341,22 +329,18 @@
 
 <style>
   .input-bar {
+    position: relative;
     display: grid;
     grid-template-columns: auto 1fr auto;
     gap: 0.35rem;
     align-items: start;
+    overflow: visible;
   }
 
   .left-stack {
     display: grid;
     gap: 0.35rem;
     align-content: start;
-  }
-
-  .vision-actions {
-    display: grid;
-    grid-template-columns: repeat(2, 60px);
-    gap: 0.35rem;
   }
 
   textarea {
@@ -400,10 +384,42 @@
     opacity: 0.6;
   }
 
-  .vision-button {
+  .camera-button {
+    position: absolute;
+    left: 0;
+    top: -64px;
+    width: 60px;
+    min-width: 60px;
     border: 1px solid var(--secondary-border);
     background: var(--secondary-bg);
     color: var(--secondary-fg);
+    z-index: 2;
+  }
+
+  .camera-button.processing {
+    border-color: #c2a54f;
+    background: rgba(194, 165, 79, 0.2);
+    color: #f9e2a8;
+  }
+
+  .camera-button.ready {
+    border-color: #4ea760;
+    background: rgba(78, 167, 96, 0.25);
+    color: #d8ffe0;
+  }
+
+  .camera-spinner {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-top-color: currentColor;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .camera-button:disabled {
+    border: 1px solid var(--secondary-border);
+    opacity: 0.7;
   }
 
   .hidden-file-input {
@@ -483,5 +499,9 @@
     0% { transform: scale(1); opacity: 0.7; }
     50% { transform: scale(1.25); opacity: 1; }
     100% { transform: scale(1); opacity: 0.7; }
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 </style>
