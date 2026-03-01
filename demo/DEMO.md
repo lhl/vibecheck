@@ -327,6 +327,34 @@ Content at a glance:
 
 The audience reads the left while watching the phone demo on the right.
 
+
+#### Rehearsal Runsheet (2-min video)
+
+Rehearse with a stopwatch. Left = terminal pane. Right = phone (scrcpy). Voiceover is recorded or live.
+
+Left pane = presenterm (`video-slide.md`) stays up the entire video. All action is on the right (phone via scrcpy).
+
+| Time | Say | Do (phone — right side) |
+|------|-----|------------------------|
+| 0:00 | We built Vibecheck - a mobile interface for Mistral Vibe so you can keep it working even when you're away from the computer. | Slide 50% + Demo 50% |
+| 0:08 | Most mobile bridges screen-scrape the terminal. Ours plugs directly into Vibe's AgentLoop — so your phone and the console share the exact same session in real time, with zero polling. | |
+| 0:21 | We do this without requiring any upstream changes to Vibe itself. | |
+| 0:25 | Typing in either the terminal or your phone reflects input and output on both sides. | |
+| 0:31 | This of course, is the same for approvals. You can approve or reject from your phone or the console. | Approval |
+| 0:37 | Oh yeah, and you get notifications as well. | Show Notification |
+| 0:42 | We're in Tokyo, so we added instant Japanese translation for any Vibe input or output using Mistral Large V3. | Show Translation |
+| 0:50 | You can pick your language in the Settings. | |
+| 0:54 | Of course, when you're on the go, you might not want to type so we use Voxtral Mini Latest for Speech-to-Text. | |
+| 1:01 | Or if you want to go fully hands free, we hooked up Eleven Labs TTS so you can just talk to your Vibe. | |
+| 1:01 | VOICE MODE: *Write and run a Hello World script.* | Write app |
+| 1:20 | We also added in Camera capabilities to help for debugging, also using Mistral Large V3 as the VLM | Snap Photo of Terminal |
+| 1:30 | Did that work? | |
+| 1:40 | **VIBE RESPONSE** | |
+| 1:50 | We of course handle as many sessions as you need | Multiple terminals |
+| 1:55 | And we added a YOLO modes that auto-approve everything, since you were going to do that anyways. |
+| 1:55 | And that's vibecheck - the way to check your vibes from anywhere. |
+
+
 #### V1. Logo + Hook [0:00–0:15] — C, U
 
 Left: presenterm slide (logo, architecture, bullets) — stays up the entire video.
@@ -376,46 +404,29 @@ Right: Quick feature flashes on phone — session list with multiple agents, tap
 - Left pane never changes — all action is on the phone (right)
 - Voiceover can be recorded live or dubbed after (dub is safer for pacing)
 
-#### Rehearsal Runsheet (2-min video)
 
-Rehearse with a stopwatch. Left = terminal pane. Right = phone (scrcpy). Voiceover is recorded or live.
 
-Left pane = presenterm (`video-slide.md`) stays up the entire video. All action is on the right (phone via scrcpy).
+# 5 Minute
 
 | Time | Say | Do (phone — right side) |
 |------|-----|------------------------|
-| 0:00 | *(beat — 2s silence)* | Slide visible on left. Phone on right — PWA connected, session list showing. |
-| 0:02 | "You vibecode. Your agent stops and waits for you." | — |
-| 0:06 | "You've walked away. It just sits there." | — |
-| 0:09 | "vibecheck — mission control for your Vibe agents, right from your phone." | — |
-| 0:15 | "Your agent writes code, runs tools —" | Events streaming in real time on phone. |
-| 0:19 | "everything streams to your phone live." | — |
-| 0:25 | — | **Approval prompt appears on phone.** Let it sit 2s. |
-| 0:27 | "When it needs approval —" | — |
-| 0:29 | "tap." | **Tap Approve.** |
-| 0:30 | "It keeps going. That's the loop." | Events resume flowing. Let it breathe 5s. |
-| 0:38 | — | Second approval if one comes naturally — approve it. Otherwise let events stream. |
-| 0:48 | "Full voice loop." | **Tap mic button.** |
-| 0:50 | — | **Speak (Japanese): "テストを実行して"** |
-| 0:54 | — | Voxtral transcription appears. **Tap send.** |
-| 0:57 | "Voxtral transcribes your voice in —" | — |
-| 1:01 | — | **ElevenLabs TTS plays agent response aloud.** |
-| 1:04 | "ElevenLabs speaks the response back. Any language." | — |
-| 1:09 | "Close the app." | **Swipe PWA away.** Lock screen visible. |
-| 1:12 | "Walk away." | — |
-| 1:15 | "Your phone buzzes when the agent needs you." | **Notification appears on lock screen.** |
-| 1:19 | "Approve from your lock screen." | **Tap Approve on notification.** |
-| 1:23 | — | — |
-| 1:25 | — | **Reopen PWA.** |
-| 1:28 | "Multi-session fleet control." | **Show session switcher** — 2-3 agents listed. |
-| 1:31 | "Japanese translation." | **Tap translate toggle on a message.** Japanese appears. |
-| 1:35 | "Hooked straight into Vibe's event loop — no terminal scraping, no upstream changes." | — |
-| 1:40 | "Devstral codes, Voxtral transcribes, Ministral notifies, Mistral Large translates, ElevenLabs speaks." | — |
-| 1:48 | "vibecheck — check your vibes from anywhere." | — |
-| 1:52 | — | Hold 3s. |
-| 1:55 | *(end)* | Stop recording. |
-
-**Total: 1:55.** 5 seconds of buffer to hard 2:00 limit.
+| 0:00 | We built Vibecheck - a mobile interface for Mistral Vibe so you can keep it working even when you're away from the computer. | Slide 50% + Demo 50% |
+| 0:08 | Most mobile bridges screen-scrape the terminal. Ours plugs directly into Vibe's AgentLoop — so your phone and the console share the exact same session in real time, with zero polling. | |
+| 0:21 | We do this without requiring any upstream changes to Vibe itself. | |
+| 0:25 | Typing in either the terminal or your phone reflects input and output on both sides. | |
+| 0:31 | This of course, is the same for approvals. You can approve or reject from your phone or the console. | Approval |
+| 0:37 | Oh yeah, and you get notifications as well. | Show Notification |
+| 0:42 | We're in Tokyo, so we added instant Japanese translation for any Vibe input or output using Mistral Large V3. | Show Translation |
+| 0:50 | You can pick your language in the Settings. | |
+| 0:54 | Of course, when you're on the go, you might not want to type so we use Voxtral Mini Latest for Speech-to-Text. | |
+| 1:01 | Or if you want to go fully hands free, we hooked up Eleven Labs TTS so you can just talk to your Vibe. | |
+| 1:01 | VOICE MODE: *Write and run a Hello World script.* | Write app |
+| 1:20 | We also added in Camera capabilities to help for debugging, also using Mistral Large V3 as the VLM | Snap Photo of Terminal |
+| 1:30 | Did that work? | |
+| 1:40 | **VIBE RESPONSE** | |
+| 1:50 | We of course handle as many sessions as you need | Multiple terminals |
+| 1:55 | And we added a YOLO modes that auto-approve everything, since you were going to do that anyways. |
+| 1:55 | And that's vibecheck - the way to check your vibes from anywhere. |
 
 ---
 
@@ -441,7 +452,8 @@ Slide: ASCII art vibecheck logo fills the terminal. Clean, bold, sets the tone.
 
 (Pause for hands.)
 
-> *"Me too. Here's the thing — your agent is coding, and then it stops. 'Can I run npm test?' And if you've walked away... it just sits there. Blocked. Waiting for you."*
+> So vibe coding is cool, but what you want to make sure your agent doesn't stop coding even while you're out and about.
+
 
 > *"We got tired of being chained to our terminals. So we built vibecheck — mission control for your Vibe agents, from your phone."*
 
