@@ -288,7 +288,7 @@ Each beat is annotated with the **judging criteria** it targets:
 
 ### SCRIPT A: 2-Minute Video (hackiterate submission)
 
-**Format:** Single continuous screen capture — 50/50 split the entire time. Left: terminal (logo/slides → Vibe). Right: scrcpy (phone). Voiceover narration.
+**Format:** Single continuous screen capture — 50/50 split the entire time. Left: presenterm (single slide, static). Right: scrcpy (phone, all action). Voiceover narration.
 **Pacing:** ~280 words total. Every second counts. No cuts or transitions.
 **Goal:** "Stop scrolling" moment. Judges watch this cold, without us in the room.
 
@@ -297,53 +297,51 @@ Each beat is annotated with the **judging criteria** it targets:
 ┌─────────────────────────┬──────────────────────────┐
 │  TERMINAL (left 50%)    │  SCRCPY (right 50%)      │
 │                         │  Phone showing vibecheck  │
-│  Starts: ASCII logo +   │  PWA — live the whole     │
-│  architecture + bullets  │  time                     │
-│                         │                           │
-│  Then: Vibe running     │                           │
-│  (clear logo, show      │                           │
-│  agent output)          │                           │
+│  presenterm showing     │  PWA — live the whole     │
+│  video-slide.md         │  time                     │
+│  (single slide, stays   │                           │
+│  up entire video)       │                           │
 └─────────────────────────┴──────────────────────────┘
 ```
 
-**Left pane content (static, visible during V1):**
+**Left pane: single presenterm slide (`demo/video-slide.md`)**
 
-The left pane is a single terminal screen — not slides. Print it before recording starts, let it sit while the voiceover and phone demo play out. Clear it when transitioning to Vibe output (V2).
+Launch before recording. Stays up the full 2 minutes — one slide, no flipping.
 
-```
- ██▒   █▓ ██▓ ▄▄▄▄   ▓█████  ▄████▄   ██░ ██ ...
-                                                    (ASCII logo)
- check your vibes from anywhere
-
- ┌────────────┐
- │ Phone PWA  │──WSS──▶ vibecheck bridge ──▶ Vibe AgentLoop
- └────────────┘         (in-process)         (Devstral)
-
- ✦ In-process with Vibe — no terminal scraping, no upstream changes
- ✦ Approve tool calls from your phone
- ✦ Push-to-talk voice (Voxtral STT)
- ✦ Push notifications (Ministral copy)
- ✦ EN↔JA translation (Mistral Large)
- ✦ ElevenLabs TTS voice response
+```bash
+cd demo && presenterm -X video-slide.md
 ```
 
-This gives the audience the "what" and "how" at a glance while the phone on the right is already live. The rest of the video is showing it all working.
+The slide renders `slides/video-banner.sh` via `+exec_replace` — flame-gradient figlet logo, architecture one-liner, feature bullets, model bar. All ANSI-colored. Preview standalone:
+
+```bash
+bash demo/slides/video-banner.sh
+```
+
+Content at a glance:
+- Flame-gradient figlet `vibecheck` logo + tagline
+- `Phone ── WSS ──▶ vibecheck bridge ──▶ Vibe AgentLoop` (architecture one-liner)
+- `in-process · typed events · no terminal scraping · no upstream changes`
+- Feature bullets: approve, voice, push, translate, multi-session
+- Model bar: Devstral · Voxtral · Ministral · Mistral Large · ElevenLabs
+
+The audience reads the left while watching the phone demo on the right.
 
 #### V1. Logo + Hook [0:00–0:15] — C, U
 
-Left: ASCII logo + architecture line + feature bullets (printed to terminal, static).
+Left: presenterm slide (logo, architecture, bullets) — stays up the entire video.
 Right: Phone showing vibecheck PWA — already connected, session visible.
 
 > *"You vibecode. Your agent stops and waits for you. You've walked away. It just sits there."*
 
 > *"vibecheck — mission control for your Vibe agents, right from your phone."*
 
-(Logo and bullets sit on the left, phone is already live on the right. Audience reads the left while watching the product on the right. Don't narrate the bullets — the voiceover sells the problem, the left pane answers "what is this" for anyone reading ahead.)
+(Don't narrate the bullets — the voiceover sells the problem, the slide answers "what is this" for anyone reading ahead.)
 
 #### V2. Core Loop — Approve From Phone [0:15–0:50] — D, T, A
 
-Left: Clear the logo, Vibe is now running — agent working on a task, output scrolling.
-Right: Events stream to the phone in real time. Approval prompt appears. Tap Approve. Vibe continues on the left.
+Left: same slide (never changes). Right: all action is on the phone.
+Events stream in real time. Approval prompt appears. Tap Approve.
 
 > *"Your agent writes code, runs tools — everything streams to your phone live. When it needs approval, tap. It keeps going. That's the loop."*
 
@@ -351,22 +349,20 @@ Right: Events stream to the phone in real time. Approval prompt appears. Tap App
 
 #### V3. Voice Loop — Voxtral In, ElevenLabs Out [0:50–1:10] — D, C, A
 
-Left: Vibe terminal continues.
-Right: Tap mic on phone. Speak in Japanese: "テストを実行して". Voxtral transcribes → send. Vibe acts on the left. Response comes back → phone speaks it via ElevenLabs TTS.
+Left: same slide. Right: Tap mic on phone. Speak in Japanese: "テストを実行して". Voxtral transcribes → send. Response comes back → phone speaks it via ElevenLabs TTS.
 
 > *"Full voice loop. Voxtral transcribes your voice in — ElevenLabs speaks the response back. Any language."*
 
 #### V4. Push Notifications — Lock Screen Approval [1:10–1:30] — U, D
 
-Left: Vibe terminal continues working.
-Right: Close the PWA (swipe away). Vibe hits an approval. Phone buzzes. Notification: "bash wants to run npm test". Tap Approve from lock screen. Vibe continues.
+Left: same slide. Right: Close the PWA (swipe away). Phone buzzes with notification: "bash wants to run npm test". Tap Approve from lock screen.
 
 > *"Close the app. Walk away. Your phone buzzes when the agent needs you. Approve from your lock screen."*
 
 #### V5. Feature Montage + Close [1:30–1:50] — A, T, C
 
-Left: Return to ASCII logo + architecture bullets (same screen from V1).
-Right: Quick feature flashes on phone — session list with multiple agents, tap translate on a message (Japanese appears), intensity slider from Chill to Ralph.
+Left: same slide (audience re-reads the bullets as voiceover names each one).
+Right: Quick feature flashes on phone — session list with multiple agents, tap translate on a message (Japanese appears).
 
 > *"Multi-session fleet control. Japanese translation. Hooked straight into Vibe's event loop — no terminal scraping, no upstream changes. Devstral codes, Voxtral transcribes, Ministral notifies, Mistral Large translates, ElevenLabs speaks. vibecheck — check your vibes from anywhere."*
 
@@ -376,45 +372,45 @@ Right: Quick feature flashes on phone — session list with multiple agents, tap
 
 **Recording notes:**
 - One take, one screen capture — no editing/cuts needed (though you can re-record)
-- Start with logo already displayed + phone already connected before hitting record
-- The left terminal transition (logo → Vibe output) is just clearing the screen / switching tmux panes
+- Before recording: launch `presenterm -X video-slide.md` on left, scrcpy on right, phone connected
+- Left pane never changes — all action is on the phone (right)
 - Voiceover can be recorded live or dubbed after (dub is safer for pacing)
 
 #### Rehearsal Runsheet (2-min video)
 
 Rehearse with a stopwatch. Left = terminal pane. Right = phone (scrcpy). Voiceover is recorded or live.
 
-| Time | Say | Do |
-|------|-----|----|
-| 0:00 | *(beat — 2s silence)* | Logo + bullets visible on left. Phone connected on right, session list showing. |
+Left pane = presenterm (`video-slide.md`) stays up the entire video. All action is on the right (phone via scrcpy).
+
+| Time | Say | Do (phone — right side) |
+|------|-----|------------------------|
+| 0:00 | *(beat — 2s silence)* | Slide visible on left. Phone on right — PWA connected, session list showing. |
 | 0:02 | "You vibecode. Your agent stops and waits for you." | — |
 | 0:06 | "You've walked away. It just sits there." | — |
 | 0:09 | "vibecheck — mission control for your Vibe agents, right from your phone." | — |
-| 0:15 | — | **Left: clear logo, switch to Vibe terminal.** Vibe is mid-task, output scrolling. |
-| 0:17 | "Your agent writes code, runs tools —" | Phone: events streaming in real time. |
-| 0:21 | "everything streams to your phone live." | — |
-| 0:28 | — | **Phone: approval prompt appears.** Let it sit for 2s. |
-| 0:30 | "When it needs approval —" | — |
-| 0:32 | "tap." | **Phone: tap Approve.** |
-| 0:33 | — | Left: Vibe continues. Let it breathe 5s. |
-| 0:38 | "It keeps going. That's the loop." | — |
-| 0:42 | — | Let streaming run another 8s. Second approval if one appears naturally — approve it. |
-| 0:50 | "Full voice loop." | **Phone: tap mic button.** |
-| 0:52 | — | **Speak into phone (Japanese): "テストを実行して"** |
-| 0:56 | — | Voxtral transcription appears. Tap send. |
-| 0:59 | "Voxtral transcribes your voice in —" | Vibe acts on left. |
-| 1:03 | — | **Phone: ElevenLabs TTS plays response aloud.** |
-| 1:05 | "ElevenLabs speaks the response back. Any language." | — |
-| 1:10 | "Close the app." | **Phone: swipe PWA away.** Screen shows home/lock. |
-| 1:13 | "Walk away." | Left: Vibe keeps working, hits a tool call. |
-| 1:17 | "Your phone buzzes when the agent needs you." | **Phone: notification appears on lock screen.** |
-| 1:21 | "Approve from your lock screen." | **Phone: tap Approve on notification.** |
-| 1:24 | — | Left: Vibe continues. |
-| 1:27 | — | **Left: switch back to logo + bullets.** Phone: reopen PWA. |
-| 1:30 | "Multi-session fleet control." | **Phone: show session switcher, 2-3 agents listed.** |
-| 1:33 | "Japanese translation." | **Phone: tap translate toggle on a message.** Japanese appears. |
-| 1:36 | "Hooked straight into Vibe's event loop — no terminal scraping, no upstream changes." | — |
-| 1:41 | "Devstral codes, Voxtral transcribes, Ministral notifies, Mistral Large translates, ElevenLabs speaks." | — |
+| 0:15 | "Your agent writes code, runs tools —" | Events streaming in real time on phone. |
+| 0:19 | "everything streams to your phone live." | — |
+| 0:25 | — | **Approval prompt appears on phone.** Let it sit 2s. |
+| 0:27 | "When it needs approval —" | — |
+| 0:29 | "tap." | **Tap Approve.** |
+| 0:30 | "It keeps going. That's the loop." | Events resume flowing. Let it breathe 5s. |
+| 0:38 | — | Second approval if one comes naturally — approve it. Otherwise let events stream. |
+| 0:48 | "Full voice loop." | **Tap mic button.** |
+| 0:50 | — | **Speak (Japanese): "テストを実行して"** |
+| 0:54 | — | Voxtral transcription appears. **Tap send.** |
+| 0:57 | "Voxtral transcribes your voice in —" | — |
+| 1:01 | — | **ElevenLabs TTS plays agent response aloud.** |
+| 1:04 | "ElevenLabs speaks the response back. Any language." | — |
+| 1:09 | "Close the app." | **Swipe PWA away.** Lock screen visible. |
+| 1:12 | "Walk away." | — |
+| 1:15 | "Your phone buzzes when the agent needs you." | **Notification appears on lock screen.** |
+| 1:19 | "Approve from your lock screen." | **Tap Approve on notification.** |
+| 1:23 | — | — |
+| 1:25 | — | **Reopen PWA.** |
+| 1:28 | "Multi-session fleet control." | **Show session switcher** — 2-3 agents listed. |
+| 1:31 | "Japanese translation." | **Tap translate toggle on a message.** Japanese appears. |
+| 1:35 | "Hooked straight into Vibe's event loop — no terminal scraping, no upstream changes." | — |
+| 1:40 | "Devstral codes, Voxtral transcribes, Ministral notifies, Mistral Large translates, ElevenLabs speaks." | — |
 | 1:48 | "vibecheck — check your vibes from anywhere." | — |
 | 1:52 | — | Hold 3s. |
 | 1:55 | *(end)* | Stop recording. |
