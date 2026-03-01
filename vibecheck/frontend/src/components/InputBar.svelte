@@ -1,4 +1,5 @@
 <script>
+  import { tick } from 'svelte'
   import MicButton from './MicButton.svelte'
 
   export let sessionId = ''
@@ -11,10 +12,17 @@
   export let value = ''
   let isSubmitting = false
   let errorMessage = ''
+  let textareaEl = null
 
   $: isConnected = connectionStatus === 'connected'
   $: isDisabled = !isConnected || !sessionId || isSubmitting
   $: placeholder = pendingInput ? 'Answer the question...' : 'Send a message...'
+
+  function autoResize() {
+    if (!textareaEl) return
+    textareaEl.style.height = 'auto'
+    textareaEl.style.height = `${Math.min(textareaEl.scrollHeight, 150)}px`
+  }
 
   function handleTranscribed(text) {
     const trimmed = typeof text === 'string' ? text.trim() : ''
@@ -22,7 +30,11 @@
       return
     }
 
-    value = value ? `${value.trimEnd()} ${trimmed}` : trimmed
+    value = trimmed
+    tick().then(() => {
+      autoResize()
+      submit()
+    })
   }
 
   async function submit() {
@@ -70,6 +82,7 @@
       }
 
       value = ''
+      tick().then(autoResize)
       if (typeof onSubmitted === 'function') {
         onSubmitted({ endpoint, payload })
       }
@@ -87,6 +100,10 @@
     event.preventDefault()
     submit()
   }
+
+  function onInput() {
+    autoResize()
+  }
 </script>
 
 <div class="input-bar">
@@ -100,9 +117,11 @@
     rows="1"
     aria-label="Message input"
     bind:value
+    bind:this={textareaEl}
     placeholder={placeholder}
     disabled={isDisabled}
     on:keydown={onKeyDown}
+    on:input={onInput}
   ></textarea>
   <button type="button" on:click={submit} disabled={isDisabled}>Send</button>
 </div>
@@ -114,11 +133,8 @@
   .input-bar {
     display: grid;
     grid-template-columns: auto 1fr auto;
-    gap: 0.5rem;
-    border: 1px solid var(--card-border);
-    border-radius: 2px;
-    background: var(--card-bg-alt);
-    padding: 0.5rem;
+    gap: 0.35rem;
+    align-items: end;
   }
 
   textarea {
@@ -129,9 +145,10 @@
     border: 1px solid var(--input-border);
     background: var(--input-bg);
     color: var(--input-fg);
-    padding: 0.6rem 0.7rem;
+    padding: 0.5rem 0.6rem;
     line-height: 1.35;
     font: inherit;
+    overflow-y: auto;
   }
 
   textarea:disabled {
@@ -139,13 +156,17 @@
   }
 
   button {
-    min-width: 72px;
+    min-width: 56px;
+    height: 42px;
     border-radius: 2px;
     border: 1px solid var(--primary-border);
     background: var(--primary-bg);
     color: var(--primary-fg);
     font-weight: 700;
-    padding: 0 0.75rem;
+    font: inherit;
+    font-weight: 700;
+    font-size: 0.82rem;
+    padding: 0 0.5rem;
   }
 
   button:disabled {
