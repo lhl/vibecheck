@@ -10,6 +10,7 @@ from starlette.responses import JSONResponse, Response
 EXACT_EXEMPT_PATHS = {
     "/",
     "/api/health",
+    "/api/telemetry/notification-click",
     "/manifest.json",
     "/sw.js",
     "/favicon.ico",

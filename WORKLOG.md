@@ -30,6 +30,23 @@
   - `cd vibecheck/frontend && npm test -- src/App.test.js` -> pass.
   - `cd vibecheck/frontend && npm run build` -> pass.
 
+### Service worker notification click telemetry (diagnostics)
+
+- Added PSK-exempt telemetry endpoint `POST /api/telemetry/notification-click` for service-worker click diagnostics:
+  - logs click routing stages into server warning logs,
+  - writes to notification audit file as well when `VIBECHECK_DEBUG=1` (same audit path behavior as approval diagnostics).
+- Auth middleware exemption added for `/api/telemetry/notification-click` so SW can post telemetry without `X-PSK`.
+- Updated `vibecheck/frontend/public/sw.js` click flow to emit best-effort telemetry events:
+  - `start`, `navigate_ok`, `navigate_error`, `open_window_fallback`, `focus_existing`, `open_window_new`, `handler_error`.
+- Bumped service worker shell cache key to `vibecheck-shell-v5` so updated SW is picked up after reload.
+- Added test coverage:
+  - backend auth + API telemetry logging tests (`vibecheck/tests/test_auth.py`, `vibecheck/tests/test_api.py`),
+  - frontend SW test asserting telemetry POST for navigate failure + fallback (`vibecheck/frontend/src/sw-notificationclick.test.js`).
+- Verification:
+  - `uv run pytest vibecheck/tests/test_api.py vibecheck/tests/test_auth.py -v` -> pass.
+  - `cd vibecheck/frontend && npm test -- src/sw-notificationclick.test.js src/notification-routing.test.js src/App.test.js` -> pass.
+  - `cd vibecheck/frontend && npm run build` -> pass.
+
 ### Push notification action tracing (Android Approve/Deny diagnostics)
 
 - Added client-side notification action tracing in `vibecheck/frontend/src/App.svelte`:

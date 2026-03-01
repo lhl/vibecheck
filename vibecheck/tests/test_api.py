@@ -188,6 +188,30 @@ async def test_approve_logs_notification_missing_outcome(api_client, caplog: pyt
 
 
 @pytest.mark.asyncio
+async def test_notification_click_telemetry_logs_without_psk(api_client, caplog: pytest.LogCaptureFixture) -> None:
+    client, _ = api_client
+
+    with caplog.at_level(logging.WARNING, logger="vibecheck.routes.api"):
+        response = await client.post(
+            "/api/telemetry/notification-click",
+            json={
+                "stage": "navigate_error",
+                "source": "sw_notificationclick",
+                "session_id": "session-a",
+                "detail": "navigation_failed",
+                "url": "/?sid=session-a",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+    assert (
+        "notification click telemetry stage=navigate_error source=sw_notificationclick session=session-a detail=navigation_failed url=/?sid=session-a"
+        in caplog.text
+    )
+
+
+@pytest.mark.asyncio
 async def test_approve_records_resolution_source_in_event_backlog(api_client) -> None:
     client, manager = api_client
     bridge = manager.attach("session-a")

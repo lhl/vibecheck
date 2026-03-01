@@ -7,6 +7,7 @@ const SW_PATH = path.resolve(process.cwd(), 'public/sw.js')
 
 function loadServiceWorkerHarness() {
   const listeners = new Map()
+  const fetchSpy = vi.fn().mockResolvedValue(new Response('', { status: 200 }))
   const self = {
     location: { origin: 'https://vibecheck.shisa.ai' },
     addEventListener(type, handler) {
@@ -37,18 +38,19 @@ function loadServiceWorkerHarness() {
   vm.runInNewContext(source, {
     self,
     caches,
+    fetch: fetchSpy,
     URL,
     Promise,
     Response,
     encodeURIComponent,
   })
 
-  return { self, listeners }
+  return { self, listeners, fetchSpy }
 }
 
 describe('service worker notificationclick routing', () => {
   it('opens a deep-linked window when existing client navigation fails', async () => {
-    const { self, listeners } = loadServiceWorkerHarness()
+    const { self, listeners, fetchSpy } = loadServiceWorkerHarness()
     const handler = listeners.get('notificationclick')
     expect(typeof handler).toBe('function')
 
@@ -79,5 +81,12 @@ describe('service worker notificationclick routing', () => {
     expect(existingClient.navigate).toHaveBeenCalledWith('/?sid=s-1&notif_source=sw_notificationclick')
     expect(self.clients.openWindow).toHaveBeenCalledWith('/?sid=s-1&notif_source=sw_notificationclick')
     expect(existingClient.focus).not.toHaveBeenCalled()
+
+    const telemetryBodies = fetchSpy.mock.calls
+      .filter(([resource]) => resource === '/api/telemetry/notification-click')
+      .map(([, options]) => JSON.parse(options?.body || '{}'))
+
+    expect(telemetryBodies.some((payload) => payload.stage === 'navigate_error')).toBe(true)
+    expect(telemetryBodies.some((payload) => payload.stage === 'open_window_fallback')).toBe(true)
   })
 })

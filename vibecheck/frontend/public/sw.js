@@ -1,5 +1,43 @@
-const SHELL_CACHE = 'vibecheck-shell-v4'
+const SHELL_CACHE = 'vibecheck-shell-v5'
 const APP_SHELL = ['/']
+
+function notificationSessionIdFromUrl(url) {
+  try {
+    const parsed = new URL(url, self.location.origin)
+    return parsed.searchParams.get('sid') || parsed.searchParams.get('session_id') || ''
+  } catch {
+    return ''
+  }
+}
+
+function telemetryDetail(error) {
+  if (!error) {
+    return ''
+  }
+  if (typeof error === 'string') {
+    return error
+  }
+  if (typeof error?.message === 'string') {
+    return error.message
+  }
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
+}
+
+async function postNotificationClickTelemetry(payload) {
+  try {
+    await fetch('/api/telemetry/notification-click', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  } catch {
+    // best-effort telemetry; never block notification click flow
+  }
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -60,9 +98,19 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const url = event.notification?.data?.url || '/'
   const source = 'sw_notificationclick'
+  const sessionId = notificationSessionIdFromUrl(url)
 
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clients) => {
+    (async () => {
+      await postNotificationClickTelemetry({
+        stage: 'start',
+        source,
+        session_id: sessionId,
+        url,
+      })
+
+      try {
+        const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
       const targetUrl = new URL(url, self.location.origin)
       const decorated = `${targetUrl.pathname}${targetUrl.search}${targetUrl.search ? '&' : '?'}notif_source=${encodeURIComponent(source)}`
       const candidates = []
@@ -85,14 +133,57 @@ self.addEventListener('notificationclick', (event) => {
         if (typeof targetClient.navigate === 'function') {
           try {
             await targetClient.navigate(decorated)
+            await postNotificationClickTelemetry({
+              stage: 'navigate_ok',
+              source,
+              session_id: sessionId,
+              url: decorated,
+              detail: `candidates=${candidates.length}`,
+            })
           } catch {
+            await postNotificationClickTelemetry({
+              stage: 'navigate_error',
+              source,
+              session_id: sessionId,
+              url: decorated,
+            })
             // navigation can fail if client no longer exists; open a fresh window on the target session
-            return self.clients.openWindow(decorated)
+            await self.clients.openWindow(decorated)
+            await postNotificationClickTelemetry({
+              stage: 'open_window_fallback',
+              source,
+              session_id: sessionId,
+              url: decorated,
+            })
+            return
           }
         }
-        return targetClient.focus()
+        await targetClient.focus()
+        await postNotificationClickTelemetry({
+          stage: 'focus_existing',
+          source,
+          session_id: sessionId,
+          url: decorated,
+          detail: `candidates=${candidates.length}`,
+        })
+        return
       }
-      return self.clients.openWindow(decorated)
-    }),
+      await self.clients.openWindow(decorated)
+      await postNotificationClickTelemetry({
+        stage: 'open_window_new',
+        source,
+        session_id: sessionId,
+        url: decorated,
+      })
+      } catch (error) {
+        await postNotificationClickTelemetry({
+          stage: 'handler_error',
+          source,
+          session_id: sessionId,
+          url,
+          detail: telemetryDetail(error),
+        })
+      }
+    })(),
   )
 })

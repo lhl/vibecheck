@@ -47,6 +47,17 @@ async def test_state_with_no_psk_returns_401(client) -> None:
     assert response.json() == {"detail": "Unauthorized"}
 
 
+@pytest.mark.asyncio
+async def test_notification_click_telemetry_no_auth_required(client) -> None:
+    response = await client.post(
+        "/api/telemetry/notification-click",
+        json={"stage": "start", "source": "sw_notificationclick"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
 def test_app_startup_fails_when_psk_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("VIBECHECK_PSK", raising=False)
 

@@ -56,6 +56,14 @@ class MessageRequest(BaseModel):
     content: str
 
 
+class NotificationClickTelemetryRequest(BaseModel):
+    stage: str
+    source: str = ""
+    session_id: str = ""
+    detail: str = ""
+    url: str = ""
+
+
 def _session_or_404(session_id: str) -> SessionBridge:
     if session_manager.has_known_session(session_id):
         return session_manager.attach(session_id)
@@ -89,6 +97,19 @@ async def session_detail(session_id: str) -> dict:
         return session_manager.session_detail(session_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Unknown session: {session_id}") from exc
+
+
+@router.post("/api/telemetry/notification-click")
+async def notification_click_telemetry(body: NotificationClickTelemetryRequest) -> dict[str, str]:
+    _audit_notification_log(
+        "notification click telemetry stage=%s source=%s session=%s detail=%s url=%s",
+        body.stage.strip() or "unknown",
+        body.source.strip(),
+        body.session_id.strip(),
+        body.detail.strip(),
+        body.url.strip(),
+    )
+    return {"status": "ok"}
 
 
 @router.post("/api/sessions/{session_id}/approve")
