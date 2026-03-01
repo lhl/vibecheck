@@ -191,6 +191,16 @@
   - `cd vibecheck/frontend && npm test -- src/components/InputBar.test.js` -> pass.
   - `cd vibecheck/frontend && npm run build` -> pass.
 
+### L8 vision composer follow-up: terminal-style processing indicator
+
+- Replaced circular camera processing spinner in `InputBar` with terminal-style loader:
+  - animated `...` plus blinking block cursor (`█`),
+  - kept same processing/ready state behavior and test hook (`data-testid="camera-spinner"`),
+  - improved visual clarity against small 60px camera button footprint.
+- Verification:
+  - `cd vibecheck/frontend && npm test -- src/components/InputBar.test.js` -> pass.
+  - `cd vibecheck/frontend && npm run build` -> pass.
+
 ## 2026-02-28
 
 ### Phase 7 planning + UI design spec

@@ -275,7 +275,9 @@
         on:click={launchTakePhotoPicker}
       >
         {#if cameraState === 'processing'}
-          <span class="camera-spinner" data-testid="camera-spinner" aria-hidden="true"></span>
+          <span class="camera-processing" data-testid="camera-spinner" aria-hidden="true">
+            <span class="camera-dots">...</span><span class="camera-cursor">█</span>
+          </span>
         {:else if cameraState === 'ready'}
           Cam ✓
         {:else}
@@ -408,13 +410,27 @@
     color: #d8ffe0;
   }
 
-  .camera-spinner {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.35);
-    border-top-color: currentColor;
-    animation: spin 0.8s linear infinite;
+  .camera-processing {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1rem;
+    color: inherit;
+    text-shadow: 0 0 6px rgba(249, 226, 168, 0.45);
+  }
+
+  .camera-dots {
+    display: inline-block;
+    width: 1.1em;
+    overflow: hidden;
+    white-space: nowrap;
+    animation: dots 1s steps(4, end) infinite;
+  }
+
+  .camera-cursor {
+    display: inline-block;
+    font-size: 0.8rem;
+    line-height: 1;
+    animation: blink 0.8s steps(1, end) infinite;
   }
 
   .camera-button:disabled {
@@ -501,7 +517,14 @@
     100% { transform: scale(1); opacity: 0.7; }
   }
 
-  @keyframes spin {
-    to { transform: rotate(360deg); }
+  @keyframes dots {
+    0% { width: 0; }
+    100% { width: 1.1em; }
+  }
+
+  @keyframes blink {
+    0% { opacity: 1; }
+    50% { opacity: 0; }
+    100% { opacity: 1; }
   }
 </style>
