@@ -369,7 +369,7 @@ L1:  Static chat mockup with mock events, approve/deny panel design
 L2:  Session switcher (dropdown/tabs), real WS rendering per session,
      fleet status bar, connection status, auto-reconnect
 L3:  MediaRecorder mic button, push-to-talk UX, transcription preview
-L4a: Service worker push handler, notification action buttons (with session_id)
+L4a: Service worker push handler, reliable app deep-link for approval routing
 L4b: Intensity slider UI, snooze controls
 L5:  Per-message translation toggle, global toggle, client-side cache
 L6:  Settings panel, dark/light theme, diff viewer, session detail view
@@ -424,9 +424,11 @@ These are moments where parallel tracks must sync and test together.
 
 ### Integration #3: Push Notification Full Loop (after L4a)
 
-**What:** Vibe waits for approval → Track A sends push → Track B's service worker shows notification → user approves → Track A resolves callback → Vibe continues.
+**What:** Vibe waits for approval → Track A sends push → Track B's service worker opens/focuses the app on the correct session (`sid`) → user approves in-app → Track A resolves callback → Vibe continues.
 
-**Test:** Close phone browser → Vibe runs a tool → phone buzzes → approve from notification → Vibe continues.
+**Test:** Close phone browser → Vibe runs a tool → phone buzzes → tap notification → app opens on correct session with pending approval visible → approve in app → Vibe continues.
+
+> **Current triage policy (2026-03-01):** Inline notification Approve/Deny action buttons are disabled due to Android action-mapping inconsistencies observed in field testing. We are temporarily using "open app + approve in-app" as the reliable path while action-button behavior is investigated across devices.
 
 ### Integration #4: Translation Pipeline (after L5)
 

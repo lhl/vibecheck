@@ -86,7 +86,8 @@ self.addEventListener('notificationclick', (event) => {
           try {
             await targetClient.navigate(decorated)
           } catch {
-            // navigation can fail if client no longer exists
+            // navigation can fail if client no longer exists; open a fresh window on the target session
+            return self.clients.openWindow(decorated)
           }
         }
         return targetClient.focus()

@@ -11,6 +11,25 @@
   - outlined future backend/frontend/test scope for a robust cancel feature,
   - called out soft-cancel vs hard-cancel constraints and required runtime/tooling decisions.
 
+### Notification open-session attach hardening (app-only approval flow)
+
+- Updated planning docs first to capture the current triage contract:
+  - `docs/PLAN.md`: L4a + Integration #3 now define reliable notification deep-linking to session `sid` and in-app approval.
+  - `docs/IMPLEMENTATION.md`: added explicit requirements for notification-open session attach hardening and SW navigate fallback behavior.
+- Frontend app boot (`vibecheck/frontend/src/App.svelte`):
+  - added `ensureNotificationSessionAttached(...)` to auto-attempt `POST /api/sessions/{sid}/resume` when app opens from notification and target session is initially not connectable,
+  - refreshes session list post-resume and then proceeds with normal socket connection logic,
+  - records trace entries for attach/resume attempt/result/error in `vibecheck_notification_trace`.
+- Service worker click routing (`vibecheck/frontend/public/sw.js`):
+  - if an existing client is found but `client.navigate(...)` fails, fallback now opens a fresh deep-linked window via `clients.openWindow(...)` so `sid` is preserved.
+- Added focused frontend tests:
+  - `vibecheck/frontend/src/notification-routing.test.js`: notification-open boot resumes disconnected target session and connects websocket to that `sid`,
+  - `vibecheck/frontend/src/sw-notificationclick.test.js`: verifies navigate-failure fallback opens a deep-linked window.
+- Verification:
+  - `cd vibecheck/frontend && npm test -- src/notification-routing.test.js src/sw-notificationclick.test.js` -> pass.
+  - `cd vibecheck/frontend && npm test -- src/App.test.js` -> pass.
+  - `cd vibecheck/frontend && npm run build` -> pass.
+
 ### Push notification action tracing (Android Approve/Deny diagnostics)
 
 - Added client-side notification action tracing in `vibecheck/frontend/src/App.svelte`:
@@ -839,3 +858,12 @@
 - Verification:
   - `uv run pytest vibecheck/tests/test_tui_bridge.py vibecheck/tests/test_launcher.py -v` -> pass.
   - `uv run pytest vibecheck/tests/ -v` -> pass.
+
+### Frontend settings polish (translate target + PSK controls)
+- Settings drawer now treats language as translation target (`JA` default), and chat message tap translation uses that selected target (`vibecheck/frontend/src/components/SettingsPanel.svelte`, `vibecheck/frontend/src/App.svelte`, `vibecheck/frontend/src/components/ChatMessage.svelte`).
+- Removed `Theme` and `Auto-translate` controls from settings UI.
+- Added a `PSK` section with password-style key update input (`New PSK` + `Update Key`), increased separation from notifications, and a larger danger action touch target.
+- `Forget Key` now requires explicit confirmation before clearing the key and returning to the lock screen.
+- Verification:
+  - `cd vibecheck/frontend && npm test -- --run src/App.test.js src/components/ChatMessage.test.js` -> pass.
+  - `cd vibecheck/frontend && npm run build` -> pass.

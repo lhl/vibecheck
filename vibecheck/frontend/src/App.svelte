@@ -17,15 +17,12 @@
   } from './lib/auth'
   import { subscribeToPush, unsubscribeFromPush, isPushSupported } from './lib/push'
   import {
-    loadAutoTranslateEnabled,
     loadNotificationsEnabled,
-    loadThemePreference,
     loadVoiceLanguage,
-    storeAutoTranslateEnabled,
     storeNotificationsEnabled,
-    storeThemePreference,
     storeVoiceLanguage,
   } from './lib/settings'
+  import { startVAD, pauseVAD, resumeVAD, destroyVAD } from './lib/vad'
   import { createWebSocket } from './lib/ws'
   import { connection } from './stores/connection'
   import {
@@ -56,13 +53,12 @@
   let activeSessionId = ''
   let voiceLanguage = loadVoiceLanguage()
   let notificationsEnabled = loadNotificationsEnabled()
-  let autoTranslateEnabled = loadAutoTranslateEnabled()
   let notificationsError = ''
   let notificationsBusy = false
   let notificationActionBusy = false
   let sessionsLoading = false
   let resumeBusy = ''
-  let theme = loadThemePreference()
+  let pskSettingsDraft = ''
   let sessionPickerOpen = true
   let settingsOpen = false
   let talkerActive = false
@@ -78,17 +74,6 @@
   let lastHapticCallId = ''
 
   $: pushSupported = isPushSupported()
-
-  $: {
-    const root = document?.documentElement
-    if (root) {
-      if (theme === 'auto') {
-        root.removeAttribute('data-theme')
-      } else {
-        root.setAttribute('data-theme', theme)
-      }
-    }
-  }
 
   let isNearBottom = true
   let showNewMessages = false
@@ -443,6 +428,45 @@
     }
   }
 
+  async function ensureNotificationSessionAttached(targetId, source) {
+    const normalizedTarget = typeof targetId === 'string' ? targetId.trim() : ''
+    const normalizedSource = typeof source === 'string' ? source.trim() : ''
+    if (!normalizedTarget || !normalizedSource) {
+      return
+    }
+
+    if (isConnectableSession(normalizedTarget)) {
+      recordNotificationTrace('notification_attach_connectable', {
+        session_id: normalizedTarget,
+        source: normalizedSource,
+      })
+      return
+    }
+
+    recordNotificationTrace('notification_attach_resume_attempt', {
+      session_id: normalizedTarget,
+      source: normalizedSource,
+    })
+
+    try {
+      await apiJson(`/api/sessions/${encodeURIComponent(normalizedTarget)}/resume`, {
+        method: 'POST',
+      })
+      await refreshSessions()
+      recordNotificationTrace('notification_attach_resume_result', {
+        session_id: normalizedTarget,
+        source: normalizedSource,
+        connectable: isConnectableSession(normalizedTarget),
+      })
+    } catch (error) {
+      recordNotificationTrace('notification_attach_resume_error', {
+        session_id: normalizedTarget,
+        source: normalizedSource,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
   function startRefreshTimer() {
     if (refreshTimer) {
       return
@@ -498,6 +522,8 @@
 
     storePsk(trimmed)
     psk = trimmed
+    pskDraft = trimmed
+    pskSettingsDraft = ''
     refreshSessions().then(() => {
       startRefreshTimer()
       if (sessionId && isConnectableSession(sessionId)) {
@@ -511,6 +537,7 @@
     clearStoredPsk()
     psk = ''
     pskDraft = ''
+    pskSettingsDraft = ''
     sessionId = ''
     activeSessionId = ''
     sessions = []
@@ -520,6 +547,34 @@
     resetEvents()
     showNewMessages = false
     renderedTimelineCount = 0
+  }
+
+  function handlePskDraftChange(event) {
+    pskSettingsDraft = event.detail?.value || event.currentTarget?.value || ''
+  }
+
+  function savePskFromSettings() {
+    const trimmed = pskSettingsDraft.trim()
+    if (!trimmed) {
+      return
+    }
+    if (trimmed === psk) {
+      pskSettingsDraft = ''
+      return
+    }
+
+    disconnectSocket()
+    storePsk(trimmed)
+    psk = trimmed
+    pskDraft = trimmed
+    pskSettingsDraft = ''
+
+    refreshSessions().then(() => {
+      startRefreshTimer()
+      if (sessionId && isConnectableSession(sessionId)) {
+        connectSocket()
+      }
+    })
   }
 
   function handleSessionInput(event) {
@@ -572,33 +627,119 @@
     storeVoiceLanguage(voiceLanguage)
   }
 
-  function toggleAutoTranslate() {
-    autoTranslateEnabled = !autoTranslateEnabled
-    storeAutoTranslateEnabled(autoTranslateEnabled)
-  }
-
-  function cycleTheme() {
-    if (theme === 'auto') {
-      theme = 'dark'
-    } else if (theme === 'dark') {
-      theme = 'light'
-    } else {
-      theme = 'auto'
+  function confirmAndClearPsk() {
+    const shouldForget =
+      typeof window === 'undefined' || typeof window.confirm !== 'function'
+        ? true
+        : window.confirm('Forget the saved PSK and lock the app?')
+    if (!shouldForget) {
+      return
     }
-    storeThemePreference(theme)
+    clearPsk()
   }
 
   // ---------------------------------------------------------------------------
-  // Talker mode
+  // Talker mode (VAD-powered voice loop)
   // ---------------------------------------------------------------------------
 
-  function toggleTalker() {
-    talkerActive = !talkerActive
+  async function toggleTalker() {
     if (talkerActive) {
-      talkerState = 'listening'
-    } else {
+      // Exiting talker mode
+      talkerActive = false
       talkerState = 'idle'
       stopTalkerAudio()
+      await destroyVAD()
+    } else {
+      // Entering talker mode
+      talkerActive = true
+      talkerState = 'listening'
+      try {
+        await startVAD({
+          onSpeechEnd: handleVADSpeechEnd,
+          onSpeechStart: handleVADSpeechStart,
+        })
+      } catch (error) {
+        console.warn('[talker] VAD init failed:', error)
+        talkerActive = false
+        talkerState = 'idle'
+      }
+    }
+  }
+
+  function handleVADSpeechStart() {
+    if (talkerActive && talkerState === 'listening') {
+      talkerState = 'listening'
+    }
+  }
+
+  async function handleVADSpeechEnd(wavBlob) {
+    if (!talkerActive || !wavBlob || wavBlob.size === 0) {
+      return
+    }
+
+    talkerState = 'transcribing'
+    await pauseVAD()
+
+    try {
+      const response = await fetch(`/api/voice/transcribe?language=${encodeURIComponent(voiceLanguage)}`, {
+        method: 'POST',
+        headers: {
+          ...(psk ? { 'X-PSK': psk } : {}),
+          'Content-Type': 'audio/wav',
+        },
+        body: wavBlob,
+      })
+
+      if (!response.ok) {
+        console.warn('[talker] STT failed:', response.status)
+        talkerState = 'listening'
+        await resumeVAD()
+        return
+      }
+
+      const payload = await response.json()
+      const text = typeof payload?.text === 'string' ? payload.text.trim() : ''
+      if (!text) {
+        talkerState = 'listening'
+        await resumeVAD()
+        return
+      }
+
+      // Submit the transcribed text as a message
+      talkerState = 'running'
+      const endpoint = $pendingInput ? 'input' : 'message'
+      const body = $pendingInput
+        ? { request_id: $pendingInput.request_id, response: text }
+        : { content: text }
+
+      const submitResponse = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(psk ? { 'X-PSK': psk } : {}),
+        },
+        body: JSON.stringify(body),
+      })
+
+      if (!submitResponse.ok) {
+        console.warn('[talker] Submit failed:', submitResponse.status)
+        talkerState = 'listening'
+        await resumeVAD()
+        return
+      }
+
+      if (typeof handleSubmitted === 'function') {
+        handleSubmitted({ endpoint, payload: body })
+      }
+
+      // Stay in 'running' state — the reactive block below will detect
+      // when the agent finishes and trigger TTS
+    } catch (error) {
+      console.warn('[talker] Speech processing error:', error)
+      if (talkerActive) {
+        talkerState = 'listening'
+        await resumeVAD()
+      }
     }
   }
 
@@ -617,6 +758,7 @@
   async function talkerSpeak(text) {
     if (!talkerActive || !text) {
       talkerState = 'listening'
+      await resumeVAD()
       return
     }
 
@@ -636,6 +778,7 @@
       if (!response.ok) {
         console.warn('[talker] TTS failed:', response.status)
         talkerState = 'listening'
+        await resumeVAD()
         return
       }
 
@@ -644,19 +787,21 @@
       const audio = new Audio(url)
       talkerAudio = audio
 
-      audio.onended = () => {
+      audio.onended = async () => {
         URL.revokeObjectURL(url)
         talkerAudio = null
         if (talkerActive) {
           talkerState = 'listening'
+          await resumeVAD()
         }
       }
 
-      audio.onerror = () => {
+      audio.onerror = async () => {
         URL.revokeObjectURL(url)
         talkerAudio = null
         if (talkerActive) {
           talkerState = 'listening'
+          await resumeVAD()
         }
       }
 
@@ -665,6 +810,7 @@
       console.warn('[talker] TTS error:', error)
       if (talkerActive) {
         talkerState = 'listening'
+        await resumeVAD()
       }
     }
   }
@@ -686,9 +832,11 @@
             talkerSpeak(content)
           } else {
             talkerState = 'listening'
+            resumeVAD()
           }
         } else {
           talkerState = 'listening'
+          resumeVAD()
         }
       }
     }
@@ -707,6 +855,9 @@
   }
 
   function toggleSettings() {
+    if (!settingsOpen) {
+      pskSettingsDraft = ''
+    }
     settingsOpen = !settingsOpen
   }
 
@@ -835,6 +986,13 @@
     if (psk) {
       ;(async () => {
         try {
+          const notificationSource = initialNotificationSource || notificationSourceFromUrl(window.location.href)
+          const targetSessionId = sessionIdFromUrl(window.location.href) || sessionId
+          if (targetSessionId && targetSessionId !== sessionId) {
+            sessionId = targetSessionId
+            storeSessionId(targetSessionId)
+          }
+
           await handleNotificationAction(
             initialAction,
             window.location.href,
@@ -842,6 +1000,9 @@
             initialNotificationSource || 'url_query',
           )
           await refreshSessions()
+          if (notificationSource && targetSessionId) {
+            await ensureNotificationSessionAttached(targetSessionId, notificationSource)
+          }
           startRefreshTimer()
 
           if (sessionId && isConnectableSession(sessionId)) {
@@ -868,6 +1029,7 @@
     stopRefreshTimer()
     disconnectSocket()
     stopTalkerAudio()
+    destroyVAD()
     if (cacheWriteTimer) {
       clearTimeout(cacheWriteTimer)
       cacheWriteTimer = null
@@ -931,7 +1093,7 @@
                 {psk}
               />
             {:else}
-              <ChatMessage {event} {psk} autoTranslate={autoTranslateEnabled} />
+              <ChatMessage {event} {psk} targetLanguage={voiceLanguage} />
             {/if}
           {/each}
         {/if}
@@ -965,17 +1127,16 @@
     <div class="settings-drawer" class:open={settingsOpen}>
       <SettingsPanel
         {voiceLanguage}
-        {autoTranslateEnabled}
         {notificationsEnabled}
         {pushSupported}
         {notificationsBusy}
         {notificationsError}
-        {theme}
+        pskDraft={pskSettingsDraft}
         on:voiceLanguageChange={handleVoiceLanguageChange}
-        on:toggleTranslate={toggleAutoTranslate}
         on:toggleNotifications={toggleNotifications}
-        on:cycleTheme={cycleTheme}
-        on:forgetKey={clearPsk}
+        on:pskDraftChange={handlePskDraftChange}
+        on:saveKey={savePskFromSettings}
+        on:forgetKey={confirmAndClearPsk}
       />
     </div>
 

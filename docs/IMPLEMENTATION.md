@@ -1255,17 +1255,27 @@ uv run pytest vibecheck/tests/test_voice.py -v
 
 **Frontend (WU-20):**
 - [ ] **`sw.js`** push handler — adapted from Proto 3
-  - `showNotification` with actions: Approve / Deny
-  - `notificationclick` → open app or postMessage
+  - `showNotification` for approval/input/error (no inline Approve/Deny action buttons in current triage mode)
+  - `notificationclick` → open/focus app with `sid` preserved in URL
+  - If focus-path navigation fails, fall back to `clients.openWindow(...)` so session deep-link is not lost
+  - Append `notif_source` query param for diagnostics
 - [ ] **`lib/push.js`**
   - Subscribe with VAPID key from server
   - Send subscription to backend
 - [ ] "Enable notifications" prompt in settings
+- [ ] **Notification session attach hardening**
+  - On app open from notification (`notif_source` present), prioritize `sid` from URL for target session
+  - If target session is not connectable after refresh, auto-attempt `POST /api/sessions/{sid}/resume`
+  - Retry connect after resume and verify pending approval visibility for that session
+- [ ] **Frontend tests**
+  - Notification open with `sid` triggers resume fallback when session initially disconnected/non-controllable
+  - `notificationclick` fallback path still opens a deep-linked app window when existing client navigation fails
 
 **Verify:**
 ```bash
 uv run pytest vibecheck/tests/test_push.py -v
-# Phone: subscribe → close app → trigger approval → phone buzzes → tap → app opens
+# Phone: subscribe → close app → trigger approval → phone buzzes → tap → app opens on correct sid
+# If pending approval exists, it is visible in-app and resolvable from ApprovalPanel
 ```
 
 ### WU-21: Japanese Auto-Translation (L5)
