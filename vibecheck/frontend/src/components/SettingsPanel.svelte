@@ -6,6 +6,9 @@
   export let pushSupported = false
   export let notificationsBusy = false
   export let notificationsError = ''
+  export let yoloEnabled = false
+  export let yoloBusy = false
+  export let yoloError = ''
   export let pskDraft = ''
 
   const dispatch = createEventDispatcher()
@@ -16,6 +19,10 @@
 
   function toggleNotifications() {
     dispatch('toggleNotifications')
+  }
+
+  function toggleYoloMode() {
+    dispatch('toggleYoloMode')
   }
 
   function handlePskDraftInput(event) {
@@ -54,6 +61,22 @@
   {#if notificationsError}
     <p class="error">{notificationsError}</p>
   {/if}
+
+  <section class="yolo-box" data-enabled={yoloEnabled}>
+    <p class="yolo-title">YOLO mode</p>
+    <p class="yolo-copy">Auto-approve every tool call immediately.</p>
+    <button
+      type="button"
+      class="yolo-toggle"
+      disabled={yoloBusy}
+      on:click={toggleYoloMode}
+    >
+      {yoloEnabled ? 'Disable YOLO mode' : 'Enable YOLO mode'}
+    </button>
+    {#if yoloError}
+      <p class="error">{yoloError}</p>
+    {/if}
+  </section>
 
   <section class="psk-section">
     <label for="psk-update">PSK</label>
@@ -146,6 +169,39 @@
     border-top: 1px solid var(--card-border);
     display: grid;
     gap: 0.45rem;
+  }
+
+  .yolo-box {
+    margin-top: 0.65rem;
+    border: 1px solid #1a1a1a;
+    background: #f7d046;
+    color: #111;
+    padding: 0.65rem;
+    display: grid;
+    gap: 0.45rem;
+  }
+
+  .yolo-title {
+    margin: 0;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 900;
+  }
+
+  .yolo-copy {
+    margin: 0;
+    font-size: 0.78rem;
+    color: #111;
+  }
+
+  .yolo-toggle {
+    border-color: #111;
+    background: #111;
+    color: #f7d046;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 900;
   }
 
 </style>

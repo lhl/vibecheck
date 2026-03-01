@@ -2,6 +2,27 @@
 
 ## 2026-03-01
 
+### YOLO mode (L9): auto-approve toggle + high-visibility UI
+
+- Implemented backend auto-approve flow in `SessionBridge`:
+  - added per-session `auto_approve` flag and `set_auto_approve(...)`,
+  - `request_approval(...)` now short-circuits when enabled while still emitting `approval_request` + auto `approval_resolution` (`source="auto_approve"`),
+  - state snapshots now carry `auto_approve`.
+- Added API route `POST /api/sessions/{session_id}/auto-approve` in `vibecheck/routes/api.py` with boolean payload `{enabled}`.
+- Wired `auto_approve` into session/state surfaces:
+  - `state_payload()`, session list/detail payloads, and initial WS state event now include the flag.
+- Implemented frontend YOLO UX:
+  - `SettingsPanel` now has an inverted yellow YOLO control box with enable/disable toggle,
+  - `App.svelte` persists YOLO preference locally, calls `/auto-approve`, and suppresses `ApprovalPanel` cards while YOLO is on,
+  - `StatusLine` now switches to bright yellow YOLO banner mode with inverted `YOLO` marker at center.
+- Added/updated tests:
+  - backend: `vibecheck/tests/test_bridge.py`, `vibecheck/tests/test_api.py`,
+  - frontend: `src/App.yolo.test.js`, `src/components/SettingsPanel.test.js`, `src/components/StatusLine.test.js`, `src/lib/settings.test.js`.
+- Verification:
+  - `uv run pytest vibecheck/tests/ -q` -> pass (`167 passed`),
+  - `cd vibecheck/frontend && npm test` -> pass (`22 files, 98 tests`),
+  - `cd vibecheck/frontend && npm run build` -> pass.
+
 ### Scope decision: defer cancellation feature to future work
 
 - Deferred implementation of Send/Cancel toggle and `POST /api/sessions/{session_id}/cancel` from current hackathon scope.

@@ -58,4 +58,20 @@ describe('StatusLine', () => {
 
     expect(screen.getByText('waiting approval')).toBeInTheDocument()
   })
+
+  it('renders a high-visibility yolo marker when enabled', () => {
+    render(StatusLine, {
+      props: {
+        agentState: 'running',
+        sessionError: '',
+        onSettingsToggle: vi.fn(),
+        settingsOpen: false,
+        yoloEnabled: true,
+      },
+    })
+
+    const line = screen.getByTestId('status-line')
+    expect(line).toHaveClass('yolo-active')
+    expect(screen.getByText('YOLO')).toBeInTheDocument()
+  })
 })

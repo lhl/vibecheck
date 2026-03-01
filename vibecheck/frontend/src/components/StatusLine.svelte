@@ -4,6 +4,7 @@
   export let onSettingsToggle = null
   export let settingsOpen = false
   export let costDisplay = '--'
+  export let yoloEnabled = false
 
   const stateColors = {
     idle: '#555',
@@ -18,23 +19,28 @@
 
 <div
   class="status-line"
+  class:yolo-active={yoloEnabled}
   on:click={onSettingsToggle}
   role="button"
   tabindex="0"
   on:keydown={(e) => e.key === 'Enter' && onSettingsToggle?.()}
   data-testid="status-line"
 >
-  <div class="left">
-    <span class="dot" style="background: {dotColor}" aria-hidden="true"></span>
-    <span class="state-label">{stateLabel}</span>
-    {#if sessionError}
-      <span class="error-hint" title={sessionError}>!</span>
-    {/if}
-  </div>
-  <div class="right">
-    <span class="cost">{costDisplay}</span>
-    <span class="caret">{settingsOpen ? '▼' : '▲'}</span>
-  </div>
+  {#if yoloEnabled}
+    <span class="yolo-marker">YOLO</span>
+  {:else}
+    <div class="left">
+      <span class="dot" style="background: {dotColor}" aria-hidden="true"></span>
+      <span class="state-label">{stateLabel}</span>
+      {#if sessionError}
+        <span class="error-hint" title={sessionError}>!</span>
+      {/if}
+    </div>
+    <div class="right">
+      <span class="cost">{costDisplay}</span>
+      <span class="caret">{settingsOpen ? '▼' : '▲'}</span>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -49,6 +55,12 @@
     user-select: none;
     min-height: 32px;
     font-size: 0.75rem;
+  }
+
+  .status-line.yolo-active {
+    justify-content: center;
+    background: #f7d046;
+    border-top-color: #111;
   }
 
   .left, .right {
@@ -81,5 +93,16 @@
   .caret {
     color: var(--text-muted);
     font-size: 0.6rem;
+  }
+
+  .yolo-marker {
+    background: #111;
+    color: #f7d046;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    padding: 0.1rem 0.7rem;
+    border: 1px solid #111;
+    line-height: 1.1;
   }
 </style>

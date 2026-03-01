@@ -114,6 +114,7 @@ async def events(websocket: WebSocket, session_id: str) -> None:
             state=bridge.state,
             attach_mode=bridge.attach_mode,
             controllable=bridge.controllable,
+            auto_approve=bridge.auto_approve,
         ),
     )
     for event in bridge.backlog():

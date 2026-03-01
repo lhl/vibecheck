@@ -3,9 +3,11 @@ import {
   loadAutoTranslateEnabled,
   loadNotificationsEnabled,
   loadVoiceLanguage,
+  loadYoloEnabled,
   storeAutoTranslateEnabled,
   storeNotificationsEnabled,
   storeVoiceLanguage,
+  storeYoloEnabled,
 } from './settings'
 
 describe('settings', () => {
@@ -44,5 +46,13 @@ describe('settings', () => {
     expect(loadAutoTranslateEnabled()).toBe(true)
     storeAutoTranslateEnabled(false)
     expect(loadAutoTranslateEnabled()).toBe(false)
+  })
+
+  it('persists yolo mode toggle', () => {
+    expect(loadYoloEnabled()).toBe(false)
+    storeYoloEnabled(true)
+    expect(loadYoloEnabled()).toBe(true)
+    storeYoloEnabled(false)
+    expect(loadYoloEnabled()).toBe(false)
   })
 })

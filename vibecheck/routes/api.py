@@ -56,6 +56,10 @@ class MessageRequest(BaseModel):
     content: str
 
 
+class AutoApproveRequest(BaseModel):
+    enabled: bool
+
+
 class NotificationClickTelemetryRequest(BaseModel):
     stage: str
     source: str = ""
@@ -175,6 +179,13 @@ async def message(session_id: str, body: MessageRequest) -> dict[str, str]:
             detail="Vibe runtime unavailable; message was not forwarded to AgentLoop",
         )
     return {"status": "queued"}
+
+
+@router.post("/api/sessions/{session_id}/auto-approve")
+async def auto_approve(session_id: str, body: AutoApproveRequest) -> dict[str, object]:
+    bridge = _session_or_404(session_id)
+    bridge.set_auto_approve(body.enabled)
+    return {"status": "ok", "auto_approve": bridge.auto_approve}
 
 
 @router.post("/api/sessions/{session_id}/resume")

@@ -1,5 +1,6 @@
 const VOICE_LANGUAGE_KEY = 'vibecheck_voice_language'
 const NOTIFICATIONS_ENABLED_KEY = 'vibecheck_notifications_enabled'
+const YOLO_ENABLED_KEY = 'vibecheck_yolo_enabled'
 const AUTO_TRANSLATE_KEY = 'vibecheck_auto_translate'
 const THEME_KEY = 'vibecheck_theme'
 
@@ -41,6 +42,14 @@ export function loadNotificationsEnabled() {
 
 export function storeNotificationsEnabled(value) {
   safeLocalStorageSet(NOTIFICATIONS_ENABLED_KEY, value ? 'true' : 'false')
+}
+
+export function loadYoloEnabled() {
+  return safeLocalStorageGet(YOLO_ENABLED_KEY) === 'true'
+}
+
+export function storeYoloEnabled(value) {
+  safeLocalStorageSet(YOLO_ENABLED_KEY, value ? 'true' : 'false')
 }
 
 export function loadAutoTranslateEnabled() {

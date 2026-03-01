@@ -71,6 +71,7 @@ async def test_state_and_detail_endpoints(api_client) -> None:
         "state": "running",
         "attach_mode": "observe_only",
         "controllable": False,
+        "auto_approve": False,
     }
 
     detail_response = await client.get("/api/sessions/session-a", headers={"X-PSK": "dev-psk"})
@@ -78,7 +79,34 @@ async def test_state_and_detail_endpoints(api_client) -> None:
     payload = detail_response.json()
     assert payload["id"] == "session-a"
     assert payload["state"] == "running"
+    assert payload["auto_approve"] is False
     assert payload["backlog"][-1]["content"] == "hello from backlog"
+
+
+@pytest.mark.asyncio
+async def test_auto_approve_toggle_endpoint_updates_bridge_state(api_client) -> None:
+    client, manager = api_client
+    manager.attach("session-a")
+
+    enabled_response = await client.post(
+        "/api/sessions/session-a/auto-approve",
+        headers={"X-PSK": "dev-psk"},
+        json={"enabled": True},
+    )
+    assert enabled_response.status_code == 200
+    assert enabled_response.json() == {"status": "ok", "auto_approve": True}
+
+    state_response = await client.get("/api/sessions/session-a/state", headers={"X-PSK": "dev-psk"})
+    assert state_response.status_code == 200
+    assert state_response.json()["auto_approve"] is True
+
+    disabled_response = await client.post(
+        "/api/sessions/session-a/auto-approve",
+        headers={"X-PSK": "dev-psk"},
+        json={"enabled": False},
+    )
+    assert disabled_response.status_code == 200
+    assert disabled_response.json() == {"status": "ok", "auto_approve": False}
 
 
 @pytest.mark.asyncio
@@ -302,6 +330,7 @@ async def test_fleet_state_aggregates(api_client) -> None:
         ("get", "/api/sessions/session-a/state", None),
         ("get", "/api/sessions/session-a", None),
         ("post", "/api/sessions/session-a/message", {"content": "hi"}),
+        ("post", "/api/sessions/session-a/auto-approve", {"enabled": True}),
         ("post", "/api/sessions/session-a/approve", {"call_id": "tc-1", "approved": True}),
         ("post", "/api/sessions/session-a/input", {"request_id": "req-1", "response": "ok"}),
         ("post", "/api/push/subscribe", {"endpoint": "https://example.com/push/abc", "keys": {"p256dh": "p", "auth": "a"}}),

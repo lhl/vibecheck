@@ -69,6 +69,7 @@ class StateChangeEvent(EventBase):
     state: Literal["idle", "running", "waiting_approval", "waiting_input", "disconnected"]
     attach_mode: Literal["live", "replay", "observe_only", "managed"] | None = None
     controllable: bool | None = None
+    auto_approve: bool | None = None
 
 
 class UserMessageEvent(EventBase):

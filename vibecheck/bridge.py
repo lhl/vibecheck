@@ -115,6 +115,7 @@ class SessionBridge:
         self._local_input_owner: object | None = None
         self._pending_file_reads: dict[str, dict[str, object]] = {}
         self._file_diffs: deque[dict[str, object]] = deque(maxlen=50)
+        self.auto_approve = False
 
     @property
     def controllable(self) -> bool:
@@ -520,17 +521,28 @@ class SessionBridge:
                 except Exception:
                     pass
 
+    def _broadcast_state_snapshot(self) -> None:
+        self._broadcast_background(
+            StateChangeEvent(
+                state=self.state,
+                attach_mode=self.attach_mode,
+                controllable=self.controllable,
+                auto_approve=self.auto_approve,
+            )
+        )
+
     def _set_state(self, state: BridgeState) -> None:
         if self.state == state:
             return
         self.state = state
-        self._broadcast_background(
-            StateChangeEvent(
-                state=state,
-                attach_mode=self.attach_mode,
-                controllable=self.controllable,
-            )
-        )
+        self._broadcast_state_snapshot()
+
+    def set_auto_approve(self, enabled: bool) -> None:
+        normalized = bool(enabled)
+        if self.auto_approve == normalized:
+            return
+        self.auto_approve = normalized
+        self._broadcast_state_snapshot()
 
     async def request_approval(
         self,
@@ -540,6 +552,15 @@ class SessionBridge:
         *,
         local_args: object | None = None,
     ) -> dict:
+        if self.auto_approve:
+            self._set_state("waiting_approval")
+            await self._broadcast(ApprovalRequestEvent(call_id=call_id, tool_name=tool_name, args=args))
+            self._set_state("running")
+            await self._broadcast(
+                ApprovalResolutionEvent(call_id=call_id, approved=True, edited_args=None, source="auto_approve")
+            )
+            return {"approved": True, "edited_args": None}
+
         future: asyncio.Future = asyncio.get_running_loop().create_future()
         self.pending_approval[call_id] = future
         self.pending_approval_context[call_id] = {"tool_name": tool_name, "args": args}
@@ -1203,6 +1224,7 @@ class SessionBridge:
             "state": self.state,
             "attach_mode": self.attach_mode,
             "controllable": self.controllable,
+            "auto_approve": self.auto_approve,
         }
         stats_event = self._build_stats_event()
         if stats_event is not None:
@@ -1319,6 +1341,11 @@ class SessionManager:
                         if session_id in self.sessions
                         else False
                     ),
+                    "auto_approve": (
+                        self.sessions[session_id].auto_approve
+                        if session_id in self.sessions
+                        else False
+                    ),
                 }
             )
         return discovered
@@ -1396,11 +1423,13 @@ class SessionManager:
                     "status": bridge.state,
                     "attach_mode": bridge.attach_mode,
                     "controllable": bridge.controllable,
+                    "auto_approve": bridge.auto_approve,
                 }
             else:
                 discovered[session_id]["status"] = bridge.state
                 discovered[session_id]["attach_mode"] = bridge.attach_mode
                 discovered[session_id]["controllable"] = bridge.controllable
+                discovered[session_id]["auto_approve"] = bridge.auto_approve
         return list(discovered.values())
 
     def resume(self, session_id: str) -> SessionBridge:
@@ -1459,6 +1488,7 @@ class SessionManager:
                 "state": bridge.state,
                 "attach_mode": bridge.attach_mode,
                 "controllable": bridge.controllable,
+                "auto_approve": bridge.auto_approve,
                 "pending_approval": list(bridge.pending_approval.keys()),
                 "pending_input": list(bridge.pending_input.keys()),
                 "backlog": [event.model_dump(mode="json") for event in bridge.backlog()],
@@ -1473,6 +1503,7 @@ class SessionManager:
             "state": "disconnected",
             "attach_mode": "observe_only",
             "controllable": False,
+            "auto_approve": False,
             "pending_approval": [],
             "pending_input": [],
             "backlog": [],

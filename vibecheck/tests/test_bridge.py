@@ -246,6 +246,39 @@ async def test_session_bridge_approval_flow_broadcasts_and_resolves() -> None:
 
 
 @pytest.mark.asyncio
+async def test_session_bridge_auto_approve_short_circuits_and_emits_events() -> None:
+    manager = RecordingConnectionManager()
+    bridge = SessionBridge("s-auto", connection_manager=manager)
+    bridge.auto_approve = True
+    bridge._vibe_runtime = VibeRuntime(
+        agent_loop_cls=FakeAgentLoop,
+        vibe_config_cls=FakeVibeConfig,
+        approval_yes=FakeApprovalResponse.YES,
+        approval_no=FakeApprovalResponse.NO,
+        ask_result_cls=FakeAskUserQuestionResult,
+        answer_cls=FakeAnswer,
+    )
+
+    decision, feedback = await asyncio.wait_for(
+        bridge._approval_callback("bash", FakeToolArgs(command="ls -la"), "tc-auto"),
+        timeout=0.2,
+    )
+    await asyncio.sleep(0)
+
+    assert decision == FakeApprovalResponse.YES
+    assert feedback is None
+    assert bridge.pending_approval == {}
+    assert bridge.state == "running"
+
+    event_types = [event["type"] for _, event in manager.events]
+    assert "approval_request" in event_types
+    resolution_events = [event for _, event in manager.events if event["type"] == "approval_resolution"]
+    assert resolution_events
+    assert resolution_events[-1]["source"] == "auto_approve"
+    assert resolution_events[-1]["approved"] is True
+
+
+@pytest.mark.asyncio
 async def test_session_bridge_input_flow_resolves() -> None:
     bridge = SessionBridge("s2")
 

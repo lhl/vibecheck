@@ -19,8 +19,10 @@
   import {
     loadNotificationsEnabled,
     loadVoiceLanguage,
+    loadYoloEnabled,
     storeNotificationsEnabled,
     storeVoiceLanguage,
+    storeYoloEnabled,
   } from './lib/settings'
   import { startVAD, pauseVAD, resumeVAD, destroyVAD } from './lib/vad'
   import { createWebSocket } from './lib/ws'
@@ -54,6 +56,9 @@
   let activeSessionId = ''
   let voiceLanguage = loadVoiceLanguage()
   let notificationsEnabled = loadNotificationsEnabled()
+  let yoloEnabled = loadYoloEnabled()
+  let yoloBusy = false
+  let yoloError = ''
   let notificationsError = ''
   let notificationsBusy = false
   let notificationActionBusy = false
@@ -82,11 +87,24 @@
   let isNearBottom = true
   let showNewMessages = false
   let renderedTimelineCount = 0
+  let lastStateEventId = ''
 
   $: timeline = $events.filter((event) =>
     event.type === 'assistant' || event.type === 'user_message' || event.type === 'tool_call',
   )
   $: latestState = [...$events].reverse().find((event) => event.type === 'state') || null
+
+  $: {
+    const stateEventId = latestState?.id || ''
+    if (stateEventId && stateEventId !== lastStateEventId) {
+      lastStateEventId = stateEventId
+      if (typeof latestState?.auto_approve === 'boolean') {
+        yoloEnabled = latestState.auto_approve
+        storeYoloEnabled(yoloEnabled)
+        yoloError = ''
+      }
+    }
+  }
 
   function formatCost(stats) {
     if (!stats) return '--'
@@ -975,6 +993,32 @@
     }
   }
 
+  async function toggleYoloMode() {
+    if (!sessionId || !psk || yoloBusy) {
+      return
+    }
+
+    yoloBusy = true
+    yoloError = ''
+    const desired = !yoloEnabled
+
+    try {
+      const payload = await apiJson(`/api/sessions/${encodeURIComponent(sessionId)}/auto-approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ enabled: desired }),
+      })
+      yoloEnabled = typeof payload?.auto_approve === 'boolean' ? payload.auto_approve : desired
+      storeYoloEnabled(yoloEnabled)
+    } catch (error) {
+      yoloError = error instanceof Error ? error.message : 'YOLO toggle failed'
+    } finally {
+      yoloBusy = false
+    }
+  }
+
   function onStreamScroll() {
     if (!streamElement) {
       return
@@ -1195,7 +1239,7 @@
 
     <footer class="composer">
       <ApprovalPanel
-        pendingApproval={$pendingApproval}
+        pendingApproval={yoloEnabled ? null : $pendingApproval}
         {sessionId}
         {psk}
         onResolved={handleApprovalResolved}
@@ -1217,12 +1261,16 @@
       <SettingsPanel
         {voiceLanguage}
         {notificationsEnabled}
+        {yoloEnabled}
+        yoloBusy={yoloBusy || !sessionId}
+        {yoloError}
         {pushSupported}
         {notificationsBusy}
         {notificationsError}
         pskDraft={pskSettingsDraft}
         on:voiceLanguageChange={handleVoiceLanguageChange}
         on:toggleNotifications={toggleNotifications}
+        on:toggleYoloMode={toggleYoloMode}
         on:pskDraftChange={handlePskDraftChange}
         on:saveKey={savePskFromSettings}
         on:forgetKey={confirmAndClearPsk}
@@ -1237,6 +1285,7 @@
       onSettingsToggle={toggleSettings}
       {settingsOpen}
       {costDisplay}
+      {yoloEnabled}
     />
   </div>
 {/if}
