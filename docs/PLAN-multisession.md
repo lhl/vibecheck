@@ -543,6 +543,81 @@ The winning strategy is **Option 1 now, Option 5B by trigger**, with compatibili
 
 ---
 
+## Recommendation: GPT-5.2 xhigh
+
+> *Collected as part of multi-model feedback on this design doc. This section represents one model's independent analysis of the options and tradeoffs.*
+
+### My core claim (what I think is actually “best”)
+
+If the product requirement includes **multiple concurrent `vibecheck-vibe` (TUI) sessions** that all appear at **one** URL (`vibecheck.shisa.ai`), then the best architecture is:
+- **Hub authoritative** for the phone UI surface (one origin, one API contract).
+- **Workers connect outbound** to the hub (no inbound worker ports required).
+- **A single worker channel carries both events and commands** as soon as feasible (Option 6 shape), even if we initially implement it with a smaller command set.
+
+That is the cleanest way to guarantee:
+- stable PWA assumptions (single origin, existing `/api/sessions/*` and `/ws/events/{sid}` contract)
+- robust routing (“approve this call_id in that session goes to the right process”)
+- multi-host extensibility (workers can run anywhere that can reach the hub)
+
+### Where I agree with the “Option 1 first” argument
+
+Option 1 (in-process managed sessions) is the fastest path to shipping:
+- a working “fleet session picker” UX
+- spawn/tear-down semantics (create/delete sessions) with minimal code
+
+So if the immediate goal is “multiple sessions in one URL,” and we can accept PWA-only sessions for some of them, I agree: **Option 1 is a great Phase 1**.
+
+### Where I disagree (the key difference)
+
+Option 1 does **not** solve the hardest stated requirement:
+- “run multiple `uv run vibecheck-vibe` sessions” (multiple TUIs, multiple OS processes)
+- “connect to all of them from vibecheck.shisa.ai”
+
+Once you require *multiple* concurrently running live TUIs, you need a hub/worker model anyway. The question becomes: **do we build a thin proxy hub (Option 4) or an authoritative hub with a worker event stream (Option 5/6)?**
+
+My strong preference is **authoritative hub + worker stream**, because WS proxying and multi-backend routing tends to be a long tail of operational bugs (disconnect semantics, backpressure, close codes, partial writes, etc.). A single “events-in, commands-out” channel is easier to reason about, test, and evolve.
+
+### Why I would avoid Option 4 (hub proxy) as the “main path”
+
+Hub proxy looks cheaper because workers already expose REST+WS, but in practice it front-loads the wrong complexity:
+- you end up debugging a WebSocket proxy under flaky mobile networks
+- you still need a registry and per-session routing logic
+- you still need coherent `/api/sessions` aggregation and state representation at the hub
+
+The “cheap” part (reusing worker WS) is not where projects fail. They fail at the proxy edges.
+
+### What I would build first (minimal authoritative hub slice)
+
+To satisfy the real requirement (“many TUIs, one URL”), the minimal slice is:
+- Worker registers with hub (session_id + metadata).
+- Worker streams events to hub (persistent WS).
+- Hub broadcasts events to PWA clients (existing room-based WS).
+- Hub forwards control actions back to the worker.
+
+For control, I’d aim to do **commands over the same worker WS** early:
+- simplest deployment (no worker ports, no firewall work, no localhost-only reverse proxy)
+- easiest future multi-host story
+
+If we need an intermediate step for speed, hub->worker HTTP on localhost is acceptable, but only if we keep the event stream as the primary mechanism so we don’t re-architect later.
+
+### Suggested objective “trigger gates” (when to prioritize hub/workers over in-process)
+
+If any of these are true, prioritize Option 5B/6 now (not later):
+- We need two or more concurrent live TUIs on the same host and the phone must see both.
+- We care about crash isolation between sessions (tools or models occasionally wedge).
+- We expect multi-host workers (or even just “run a worker from my laptop to the shared hub”).
+- We want push notifications to be consistent across the whole fleet from one origin.
+
+If none are true yet, ship Option 1 first, but keep the API payloads ready for worker ownership fields (`origin`, `worker_id`).
+
+### Bottom line
+
+If “multiple `vibecheck-vibe` TUIs at one URL” is a must-have, then **Option 5B moving toward Option 6** is the best primary path.
+
+If “multiple sessions at one URL” is the goal and TUI-per-session is not urgent, then **Option 1 now + explicit trigger gates for Option 5B** is the pragmatic path.
+
+---
+
 ## Phase 2: Hub + Remote Workers (Option 5B)
 
 ### When to build this

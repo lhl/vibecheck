@@ -999,3 +999,11 @@
   - Option D: single supervisor process,
   - Option E: tmux/PTY fallback.
 - Added a phased rollout (M0–M4), including future `POST /api/sessions` and `DELETE /api/sessions/{id}` for spawn/teardown while preserving operator TUI access (SSH/tmux path) plus PWA control.
+
+### Multi-model recommendation capture (GPT-5.3-Codex xhigh)
+- Added a dedicated `## Recommendation: GPT-5.3-Codex (xhigh)` section to `docs/PLAN-multisession.md`.
+- Recommendation emphasizes an explicit staged policy:
+  - ship Option 1 now for fastest single-origin multi-session value,
+  - add migration seams immediately (`session_origin`, `worker_id`-ready metadata),
+  - promote to Option 5B by concrete trigger gates (isolation, TUI-per-spawned-session, scale, multi-host).
+- Included reasoning on why to defer full worker protocol complexity until observed demand while preserving a stable public PWA API contract.
