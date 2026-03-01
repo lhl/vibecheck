@@ -24,7 +24,7 @@ describe('ChatMessage', () => {
   })
 
   it('renders user bubble alignment and code block', () => {
-    render(ChatMessage, {
+    const { container } = render(ChatMessage, {
       event: {
         id: 'u-1',
         type: 'user_message',
@@ -34,6 +34,7 @@ describe('ChatMessage', () => {
     })
 
     expect(screen.getByText('const ok = true')).toBeInTheDocument()
+    expect(container.querySelector('.message-body pre')).toBeInTheDocument()
     expect(screen.getByTestId('chat-message')).toHaveClass('user')
   })
 

@@ -11,6 +11,15 @@
   - outlined future backend/frontend/test scope for a robust cancel feature,
   - called out soft-cancel vs hard-cancel constraints and required runtime/tooling decisions.
 
+### Frontend scroll fix: wide output horizontal pan
+
+- Updated chat stream container to allow horizontal overflow (`.timeline { overflow-x: auto; }`) while keeping viewport lock (`html/body` + shell remain overflow-hidden) in `vibecheck/frontend/src/App.svelte`.
+- Added regression coverage in `vibecheck/frontend/src/App.test.js` to assert the stream CSS keeps horizontal scrolling enabled for wide content.
+- Tightened chat message test coverage in `vibecheck/frontend/src/components/ChatMessage.test.js` to ensure rendered code blocks sit inside `.message-body`.
+- Verification:
+  - `cd vibecheck/frontend && npm test -- src/App.test.js src/components/ChatMessage.test.js` -> pass.
+  - `cd vibecheck/frontend && npm run build` -> pass.
+
 ## 2026-02-28
 
 ### Phase 7 planning + UI design spec

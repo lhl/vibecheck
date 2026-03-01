@@ -1,5 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import App from './App.svelte'
 import { setConnection } from './stores/connection'
 import { appendEvent, resetEvents } from './stores/events'
@@ -273,6 +275,15 @@ describe('App phase 4 shell', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'New messages ↓' })).toBeInTheDocument()
     })
+  })
+
+  it('allows horizontal scrolling in the chat stream for wide content', async () => {
+    localStorage.setItem('vibecheck_psk', 'dev-psk')
+
+    render(App)
+    await screen.findByTestId('chat-scroll')
+    const appSource = readFileSync(resolve(process.cwd(), 'src/App.svelte'), 'utf8')
+    expect(appSource).toMatch(/\.timeline\s*\{[\s\S]*overflow-x:\s*auto;/)
   })
 
   it('does not optimistically append a user bubble before websocket echo', async () => {
