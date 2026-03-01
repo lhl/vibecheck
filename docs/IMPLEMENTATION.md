@@ -1484,11 +1484,11 @@ scripts/smoke_test.sh http://localhost:7870
 ### L8: Spawn/Orchestrate & Rich Media
 
 - [ ] L8: Spawn/kill sessions from mobile (`POST/DELETE /api/sessions`)
-- [ ] L8: Camera/gallery → Mistral Large 3 multimodal → context for Vibe
+- [x] L8: Camera/gallery → Mistral Large 3 multimodal → context for Vibe
   - **Prior art:** `frontend-prototype/server/server/app.py` has working `POST /api/vision` endpoint (base64 upload → Mistral `mistral-large-latest` multimodal, MIME validation, size guard, error mapping). `frontend-prototype/frontend/src/App.svelte` has camera capture (`capture="environment"`), gallery upload, image preview, describe flow with state machine + stale-request guards. `frontend-prototype/server/tests/test_api.py` has vision endpoint test coverage (success, missing image, unsupported MIME, oversized, upstream errors). Also `prototypes/camera-capture/` has a standalone camera capture prototype. Port vision endpoint to `vibecheck/routes/vision.py`, add PSK auth, wire FE camera/gallery UI into chat.
-  - **Port shape:** add `vibecheck/routes/vision.py` (new router), register in `vibecheck/app.py`, and add `vibecheck/tests/test_vision.py`.
-  - **Composer integration target:** wire camera/gallery actions into `vibecheck/frontend/src/components/InputBar.svelte` using hidden file inputs. Keep controls compact and contextual: show two 60px quick-action buttons only while the message textarea is focused, positioned above-left of the mic control stack.
-  - **Frontend verification addendum:** camera and upload buttons appear only on input focus, trigger hidden file inputs, submit multipart `image` to `/api/vision`, and surface response/error without blocking normal text send flow.
+  - **Completed implementation:** added `vibecheck/routes/vision.py` router, registered in `vibecheck/app.py`, and shipped coverage in `vibecheck/tests/test_vision.py`.
+  - **Composer integration shipped:** `vibecheck/frontend/src/components/InputBar.svelte` now supports in-composer camera capture, processing/ready button states, hidden caption storage, and automatic `ATTACHED IMAGE:` block append at send.
+  - **Verification completed:** backend tests (`uv run pytest vibecheck/tests/test_vision.py -v` and full suite) + frontend tests/build (`npm test -- src/components/InputBar.test.js`, `npm run build`) all passing.
 
 ### L9: Smart Autonomy & Showmanship
 
