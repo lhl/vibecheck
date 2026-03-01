@@ -1159,6 +1159,11 @@
       {isConnectableSession}
     />
 
+    <div class="content-area">
+    {#if sessionPickerOpen}
+      <div class="picker-backdrop" on:click={toggleSessionPicker} role="presentation"></div>
+    {/if}
+
     <section class="timeline-wrap">
       <div class="timeline" bind:this={streamElement} on:scroll={onStreamScroll} data-testid="chat-scroll">
         {#if timeline.length === 0}
@@ -1223,6 +1228,8 @@
         on:forgetKey={confirmAndClearPsk}
       />
     </div>
+
+    </div><!-- .content-area -->
 
     <StatusLine
       agentState={latestState?.state || 'unknown'}
@@ -1347,6 +1354,24 @@
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
     overflow: hidden;
+  }
+
+  .content-area {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  .picker-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.95);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 10;
+    cursor: pointer;
   }
 
   .timeline-wrap {
