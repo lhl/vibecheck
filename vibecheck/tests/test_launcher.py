@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from types import SimpleNamespace
 import tomllib
@@ -86,6 +87,17 @@ def test_build_uvicorn_config_uses_warning_log_level() -> None:
     assert config.log_level == "warning"
 
 
+def test_parse_launcher_args_accepts_debug_and_log_file_flags() -> None:
+    vibe_args, ws_port = launcher.parse_launcher_args(
+        ["--ws-port", "8787", "--debug", "--log-file", "/tmp/vibecheck-debug.log", "hello"]
+    )
+
+    assert ws_port == 8787
+    assert getattr(vibe_args, "vibecheck_debug", False) is True
+    assert getattr(vibe_args, "vibecheck_log_file", "") == "/tmp/vibecheck-debug.log"
+    assert getattr(vibe_args, "initial_prompt", None) == "hello"
+
+
 def test_build_agent_loop_passes_message_observer(fake_runtime: VibeRuntime) -> None:
     fake_args = SimpleNamespace(agent="default", enabled_tools=None)
 
@@ -152,6 +164,8 @@ def test_launch_creates_live_bridge_and_runs_app(
         teleport=False,
         agent="default",
         enabled_tools=None,
+        vibecheck_debug=False,
+        vibecheck_log_file="",
     )
 
     monkeypatch.setenv("VIBECHECK_PSK", "dev-psk")
@@ -169,6 +183,36 @@ def test_launch_creates_live_bridge_and_runs_app(
     assert FakeVibeCheckApp.last_instance is not None
     assert FakeVibeCheckApp.last_instance.run_called is True
     assert FakeVibeCheckApp.last_instance.kwargs["ws_port"] == 9001
+
+
+def test_launch_sets_notification_debug_env_and_log_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fake_runtime: VibeRuntime,
+) -> None:
+    manager = SessionManager(logs_root=tmp_path / "logs")
+    fake_args = SimpleNamespace(
+        initial_prompt=None,
+        teleport=False,
+        agent="default",
+        enabled_tools=None,
+        vibecheck_debug=True,
+        vibecheck_log_file="/tmp/custom-vibecheck.log",
+    )
+
+    monkeypatch.setenv("VIBECHECK_PSK", "dev-psk")
+    monkeypatch.delenv("VIBECHECK_DEBUG", raising=False)
+    monkeypatch.delenv("VIBECHECK_NOTIFICATION_AUDIT_LOG", raising=False)
+    monkeypatch.setattr(launcher, "session_manager", manager)
+    monkeypatch.setattr(launcher, "parse_launcher_args", lambda argv=None: (fake_args, 9001))
+    monkeypatch.setattr(launcher, "load_vibe_runtime", lambda: fake_runtime)
+    monkeypatch.setattr(launcher, "create_app", lambda: object())
+    monkeypatch.setattr(launcher, "VibeCheckApp", FakeVibeCheckApp)
+
+    launcher.launch([])
+
+    assert os.getenv("VIBECHECK_DEBUG") == "1"
+    assert os.getenv("VIBECHECK_NOTIFICATION_AUDIT_LOG") == "/tmp/custom-vibecheck.log"
 
 
 @pytest.mark.asyncio

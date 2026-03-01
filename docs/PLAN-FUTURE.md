@@ -2,6 +2,22 @@
 
 This document captures legitimate follow-ups identified during Phase 7 session work (WU-23/WU-24: session picker + resume/diffs). These items are intentionally **out of scope for the hackathon deliverable**, but worth tracking for a production-hardening pass.
 
+## P1 — Android notification action mapping bug (Approve arrives as Deny)
+
+- **Observed behavior (2026-03-01):**
+  - Tapping **Approve** from Android notification actions can arrive at backend as `action=deny`, `approved=False`.
+  - Backend/session routing and call-id resolution are working; the mismatch appears in action mapping before `/approve` payload is constructed.
+- **Current mitigation (enabled now):**
+  - Approval push is downgraded to a regular notification (no inline Approve/Deny actions).
+  - Notification click behavior is "open/focus app session", then user approves/denies from in-app panel (known-good path).
+- **Why this mitigation:**
+  - Prevents accidental denials while preserving reliable remote control.
+  - Keeps notification-to-session deep-linking without depending on platform-specific action quirks.
+- **Follow-up investigation scope:**
+  - Reproduce on multiple Android Chrome/WebView versions and device vendors.
+  - Validate whether action IDs are inverted, dropped, or normalized unexpectedly by browser/runtime.
+  - Re-introduce inline actions only behind a feature flag after cross-device validation.
+
 ## P1 — Turn cancellation semantics + UX (deferred)
 
 - **Decision:** Defer the Send/Cancel toggle and `/api/sessions/{id}/cancel` endpoint until we need stronger interruption guarantees or true token-stream UX.

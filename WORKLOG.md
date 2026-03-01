@@ -11,6 +11,82 @@
   - outlined future backend/frontend/test scope for a robust cancel feature,
   - called out soft-cancel vs hard-cancel constraints and required runtime/tooling decisions.
 
+### Push notification action tracing (Android Approve/Deny diagnostics)
+
+- Added client-side notification action tracing in `vibecheck/frontend/src/App.svelte`:
+  - stores bounded trace entries in localStorage key `vibecheck_notification_trace`,
+  - records action flow stages (`received`, `resolved_session`, `approve_request`, `approve_ok`, error/skip reasons),
+  - includes action/source/session/call-id metadata to diagnose misrouted Approve/Deny taps.
+- Added global debug helper in browser runtime:
+  - `window.__vibecheckNotificationTrace.dump()`
+  - `window.__vibecheckNotificationTrace.clear()`
+  - `window.__vibecheckNotificationTrace.enableConsole()` / `disableConsole()`
+- Added notification metadata headers on approval REST calls:
+  - `X-Vibecheck-Notification-Action`
+  - `X-Vibecheck-Notification-Source`
+- Added service-worker source tagging in `vibecheck/frontend/public/sw.js`:
+  - posts `source: "sw_notificationclick"` with `notification_action` messages,
+  - adds `notif_source=sw_notificationclick` when opening a new client window.
+- Added backend correlation log in `vibecheck/routes/api.py` for `/approve` when debug headers are present.
+- Added frontend tests in `vibecheck/frontend/src/App.test.js`:
+  - explicit service-worker **approve** path asserts `approved: true` + debug headers + trace entry,
+  - explicit service-worker **deny** path asserts `approved: false` + debug headers + trace entry.
+- Verification:
+  - `cd vibecheck/frontend && npm test -- src/App.test.js` -> pass.
+  - `uv run pytest vibecheck/tests/test_api.py -v` -> pass.
+  - `cd vibecheck/frontend && npm run build` -> pass.
+
+### Approval logs visible in `vibecheck-vibe` mode
+
+- Updated `/api/sessions/{session_id}/approve` logging in `vibecheck/routes/api.py` from `info` to `warning` for notification-originated actions so logs are visible when running `uv run vibecheck-vibe` (uvicorn `warning` log level).
+- Added explicit warning outcome logs for notification approvals:
+  - `status=ok` when pending approval resolves
+  - `status=missing` when call id is not pending (404 path)
+- Added backend tests in `vibecheck/tests/test_api.py`:
+  - `test_approve_logs_notification_request_and_success_outcome`
+  - `test_approve_logs_notification_missing_outcome`
+- Verification:
+  - `uv run pytest vibecheck/tests/test_api.py -v` -> pass.
+
+### Notification approval audit file fallback
+
+- Added `_audit_notification_log()` in `vibecheck/routes/api.py` for notification approval request/outcome lines.
+- The helper still emits `logger.warning(...)`, and also appends plain-text audit lines to:
+  - `/tmp/vibecheck-notification.log` by default, or
+  - path from `VIBECHECK_NOTIFICATION_AUDIT_LOG` when set.
+- This bypasses full-screen TUI logging visibility issues so notification taps can be diagnosed from a stable file.
+- Added backend coverage in `vibecheck/tests/test_api.py`:
+  - `test_approve_writes_notification_audit_file`.
+- Verification:
+  - `uv run pytest vibecheck/tests/test_api.py -v` -> pass.
+
+### Notification action triage + approval source tagging
+
+- Added approval resolution source tagging end-to-end:
+  - `ApprovalResolutionEvent` now includes optional `source`,
+  - `SessionBridge.resolve_approval(..., source=...)` forwards source into backlog/websocket events,
+  - local/TUI callback path tags approvals as `tui_local`,
+  - API path accepts `X-Vibecheck-Approval-Source` and tags event source (e.g., `pwa_ui`),
+  - frontend in-app approval posts `X-Vibecheck-Approval-Source: pwa_ui`.
+- Switched push approval notifications to **regular open-app notifications** (no inline Approve/Deny actions):
+  - removed `actions` + `call_id` from approval push payload in `vibecheck/push.py`,
+  - updated service worker click behavior in `vibecheck/frontend/public/sw.js`:
+    - cache bump to `v4`,
+    - focus/navigate existing app window or open app URL,
+    - carry only `notif_source` deep-link context.
+- Added launcher debug flags for runtime notification diagnostics:
+  - `uv run vibecheck-vibe --debug [--log-file /path/to/log]`,
+  - `--debug` enables audit file writing,
+  - `--log-file` selects destination; default remains `/tmp/vibecheck-notification.log`.
+- Updated tests:
+  - backend: source tagging + debug/audit + payload shape assertions,
+  - launcher: parse + env wiring for `--debug`/`--log-file`,
+  - frontend: approval panel header source assertion.
+- Verification:
+  - `uv run pytest vibecheck/tests/test_api.py vibecheck/tests/test_push.py vibecheck/tests/test_bridge.py vibecheck/tests/test_launcher.py -q` -> pass.
+  - `cd vibecheck/frontend && npm test -- src/App.test.js src/components/ApprovalPanel.test.js` -> pass.
+  - `cd vibecheck/frontend && npm run build` -> pass.
+
 ### Frontend scroll fix: wide output horizontal pan
 
 - Updated chat stream container to allow horizontal overflow (`.timeline { overflow-x: auto; }`) while keeping viewport lock (`html/body` + shell remain overflow-hidden) in `vibecheck/frontend/src/App.svelte`.

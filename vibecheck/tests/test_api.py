@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -104,6 +105,115 @@ async def test_approve_pending_and_missing_cases(api_client) -> None:
     )
     assert resolved.status_code == 200
     assert await future == {"approved": False, "edited_args": {"safe": True}}
+
+
+@pytest.mark.asyncio
+async def test_approve_logs_notification_request_and_success_outcome(api_client, caplog: pytest.LogCaptureFixture) -> None:
+    client, manager = api_client
+    bridge = manager.attach("session-a")
+
+    future: asyncio.Future = asyncio.get_running_loop().create_future()
+    bridge.pending_approval["tc-1"] = future
+    bridge.pending_approval_context["tc-1"] = {"tool_name": "bash", "args": {"command": "ls"}}
+    bridge.state = "waiting_approval"
+
+    with caplog.at_level(logging.WARNING, logger="vibecheck.routes.api"):
+        response = await client.post(
+            "/api/sessions/session-a/approve",
+            headers={
+                "X-PSK": "dev-psk",
+                "X-Vibecheck-Notification-Action": "approve",
+                "X-Vibecheck-Notification-Source": "sw_notificationclick",
+            },
+            json={"call_id": "tc-1", "approved": True},
+        )
+
+    assert response.status_code == 200
+    assert await future == {"approved": True, "edited_args": None}
+    assert "notification approval request session=session-a call_id=tc-1 approved=True action=approve source=sw_notificationclick" in caplog.text
+    assert "notification approval outcome session=session-a call_id=tc-1 status=ok" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_approve_writes_notification_audit_file(api_client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    client, manager = api_client
+    bridge = manager.attach("session-a")
+
+    future: asyncio.Future = asyncio.get_running_loop().create_future()
+    bridge.pending_approval["tc-1"] = future
+    bridge.pending_approval_context["tc-1"] = {"tool_name": "bash", "args": {"command": "ls"}}
+    bridge.state = "waiting_approval"
+
+    audit_path = tmp_path / "notification-audit.log"
+    monkeypatch.setenv("VIBECHECK_DEBUG", "1")
+    monkeypatch.setenv("VIBECHECK_NOTIFICATION_AUDIT_LOG", str(audit_path))
+
+    response = await client.post(
+        "/api/sessions/session-a/approve",
+        headers={
+            "X-PSK": "dev-psk",
+            "X-Vibecheck-Notification-Action": "approve",
+            "X-Vibecheck-Notification-Source": "sw_notificationclick",
+        },
+        json={"call_id": "tc-1", "approved": True},
+    )
+
+    assert response.status_code == 200
+    assert await future == {"approved": True, "edited_args": None}
+    assert audit_path.exists()
+    audit_text = audit_path.read_text(encoding="utf-8")
+    assert "notification approval request session=session-a call_id=tc-1 approved=True action=approve source=sw_notificationclick" in audit_text
+    assert "notification approval outcome session=session-a call_id=tc-1 status=ok" in audit_text
+
+
+@pytest.mark.asyncio
+async def test_approve_logs_notification_missing_outcome(api_client, caplog: pytest.LogCaptureFixture) -> None:
+    client, manager = api_client
+    manager.attach("session-a")
+
+    with caplog.at_level(logging.WARNING, logger="vibecheck.routes.api"):
+        response = await client.post(
+            "/api/sessions/session-a/approve",
+            headers={
+                "X-PSK": "dev-psk",
+                "X-Vibecheck-Notification-Action": "deny",
+                "X-Vibecheck-Notification-Source": "sw_notificationclick",
+            },
+            json={"call_id": "missing", "approved": False},
+        )
+
+    assert response.status_code == 404
+    assert "notification approval request session=session-a call_id=missing approved=False action=deny source=sw_notificationclick" in caplog.text
+    assert "notification approval outcome session=session-a call_id=missing status=missing" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_approve_records_resolution_source_in_event_backlog(api_client) -> None:
+    client, manager = api_client
+    bridge = manager.attach("session-a")
+
+    future: asyncio.Future = asyncio.get_running_loop().create_future()
+    bridge.pending_approval["tc-source"] = future
+    bridge.pending_approval_context["tc-source"] = {"tool_name": "bash", "args": {"command": "pwd"}}
+    bridge.state = "waiting_approval"
+
+    response = await client.post(
+        "/api/sessions/session-a/approve",
+        headers={
+            "X-PSK": "dev-psk",
+            "X-Vibecheck-Approval-Source": "pwa_ui",
+        },
+        json={"call_id": "tc-source", "approved": True},
+    )
+    assert response.status_code == 200
+    assert await future == {"approved": True, "edited_args": None}
+
+    resolution = next(
+        event
+        for event in reversed(bridge.backlog())
+        if getattr(event, "type", "") == "approval_resolution" and getattr(event, "call_id", "") == "tc-source"
+    )
+    assert getattr(resolution, "source", None) == "pwa_ui"
 
 
 @pytest.mark.asyncio

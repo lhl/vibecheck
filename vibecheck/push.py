@@ -234,11 +234,6 @@ class PushManager:
                 "requireInteraction": True,
                 "tag": f"approval:{event.call_id}",
                 "url": f"/?sid={session_id}",
-                "call_id": event.call_id,
-                "actions": [
-                    {"action": "approve", "title": "Approve"},
-                    {"action": "deny", "title": "Deny"},
-                ],
             }
 
         if event.type == "input_request":

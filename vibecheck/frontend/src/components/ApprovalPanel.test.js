@@ -33,6 +33,13 @@ describe('ApprovalPanel', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
 
     expect(fetch).toHaveBeenCalledWith('/api/sessions/s-1/approve', expect.any(Object))
+    const call = fetch.mock.calls.find((entry) => entry[0] === '/api/sessions/s-1/approve')
+    expect(call).toBeTruthy()
+    expect(call?.[1]?.headers).toMatchObject({
+      'Content-Type': 'application/json',
+      'X-PSK': 'dev-psk',
+      'X-Vibecheck-Approval-Source': 'pwa_ui',
+    })
     await waitFor(() => {
       expect(onResolved).toHaveBeenCalledWith('call-1', true)
     })

@@ -23,6 +23,7 @@
         headers: {
           'Content-Type': 'application/json',
           ...(psk ? { 'X-PSK': psk } : {}),
+          'X-Vibecheck-Approval-Source': 'pwa_ui',
         },
         body: JSON.stringify({
           call_id: pendingApproval.call_id,

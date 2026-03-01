@@ -120,7 +120,8 @@ async def test_push_sends_notification_on_approval_request(
     assert isinstance(payload, str) and "requireInteraction" in payload
     decoded = json.loads(payload)
     assert decoded["body"] == "Please approve (test)"
-    assert decoded["call_id"] == "tc-push-1", "payload must include call_id for call-bound actions"
+    assert "call_id" not in decoded, "approval push should not include inline action call_id"
+    assert "actions" not in decoded, "approval push should not include inline Approve/Deny actions"
     assert calls[0]["vapid_claims"] == {"sub": "mailto:tests@example.com"}
 
     assert bridge.resolve_approval("tc-push-1", approved=True)

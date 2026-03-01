@@ -228,14 +228,21 @@ async def test_session_bridge_approval_flow_broadcasts_and_resolves() -> None:
     await asyncio.sleep(0)
 
     assert bridge.state == "waiting_approval"
-    assert bridge.resolve_approval("tc-1", approved=True, edited_args={"command": "npm test -- -u"})
+    assert bridge.resolve_approval(
+        "tc-1",
+        approved=True,
+        edited_args={"command": "npm test -- -u"},
+        source="api_test",
+    )
     result = await task
 
     assert result["approved"] is True
     assert result["edited_args"] == {"command": "npm test -- -u"}
     assert bridge.state == "running"
     assert any(event["type"] == "approval_request" for _, event in manager.events)
-    assert any(event["type"] == "approval_resolution" for _, event in manager.events)
+    resolution_events = [event for _, event in manager.events if event["type"] == "approval_resolution"]
+    assert resolution_events
+    assert resolution_events[-1]["source"] == "api_test"
 
 
 @pytest.mark.asyncio

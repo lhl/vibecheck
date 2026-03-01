@@ -48,6 +48,7 @@ class ApprovalResolutionEvent(EventBase):
     call_id: str
     approved: bool
     edited_args: dict | None = None
+    source: str | None = None
 
 
 class InputRequestEvent(EventBase):

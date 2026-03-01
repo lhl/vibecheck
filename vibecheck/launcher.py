@@ -38,6 +38,8 @@ def parse_launcher_args(argv: list[str] | None = None) -> tuple[argparse.Namespa
 
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--ws-port", type=int, default=7870)
+    parser.add_argument("--debug", action="store_true", default=False)
+    parser.add_argument("--log-file", default="")
     known, remaining = parser.parse_known_args(raw_args)
 
     try:
@@ -52,6 +54,8 @@ def parse_launcher_args(argv: list[str] | None = None) -> tuple[argparse.Namespa
     except Exception:
         vibe_args = _fallback_vibe_parser(remaining)
 
+    setattr(vibe_args, "vibecheck_debug", bool(known.debug))
+    setattr(vibe_args, "vibecheck_log_file", str(known.log_file or "").strip())
     return vibe_args, known.ws_port
 
 
@@ -382,6 +386,15 @@ def _build_agent_loop(
 
 def launch(argv: list[str] | None = None) -> None:
     vibe_args, ws_port = parse_launcher_args(argv)
+
+    debug_enabled = bool(getattr(vibe_args, "vibecheck_debug", False))
+    log_file = str(getattr(vibe_args, "vibecheck_log_file", "") or "").strip()
+    if log_file:
+        debug_enabled = True
+    if debug_enabled:
+        os.environ["VIBECHECK_DEBUG"] = "1"
+        os.environ["VIBECHECK_NOTIFICATION_AUDIT_LOG"] = log_file or "/tmp/vibecheck-notification.log"
+
     runtime = load_vibe_runtime()
     bridge = SessionBridge(
         session_id="live-bootstrap",

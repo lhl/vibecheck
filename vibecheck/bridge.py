@@ -557,7 +557,13 @@ class SessionBridge:
         result = await future
         return result
 
-    def resolve_approval(self, call_id: str, approved: bool, edited_args: dict | None = None) -> bool:
+    def resolve_approval(
+        self,
+        call_id: str,
+        approved: bool,
+        edited_args: dict | None = None,
+        source: str | None = None,
+    ) -> bool:
         future = self.pending_approval.pop(call_id, None)
         self.pending_approval_context.pop(call_id, None)
         if future is None:
@@ -567,7 +573,7 @@ class SessionBridge:
         self._settle_local_approval_state(approved=approved, edited_args=edited_args)
         self._set_state("running")
         self._broadcast_background(
-            ApprovalResolutionEvent(call_id=call_id, approved=approved, edited_args=edited_args)
+            ApprovalResolutionEvent(call_id=call_id, approved=approved, edited_args=edited_args, source=source)
         )
         return True
 
@@ -763,7 +769,7 @@ class SessionBridge:
             runtime = self._vibe_runtime
             yes = runtime.approval_yes if runtime else "y"
             approved = verdict == yes
-            self.resolve_approval(tool_call_id, approved=approved)
+            self.resolve_approval(tool_call_id, approved=approved, source="tui_local")
         except asyncio.CancelledError:
             raise
         except Exception:
