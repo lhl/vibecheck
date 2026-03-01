@@ -220,7 +220,7 @@
     min-height: 42px;
     min-width: 88px;
     padding: 0 0.7rem;
-    border-radius: 12px;
+    border-radius: 2px;
     border: 1px solid #6d4a4a;
     background: #241416;
     color: #ffd8d8;

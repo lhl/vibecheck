@@ -84,7 +84,7 @@
   .approval-panel {
     border: 1px solid var(--session-status-waiting);
     background: var(--card-bg-alt);
-    border-radius: 14px;
+    border-radius: 2px;
     padding: 0.75rem;
     display: grid;
     gap: 0.6rem;
@@ -129,7 +129,7 @@
 
   button {
     min-height: 40px;
-    border-radius: 10px;
+    border-radius: 2px;
     border: 1px solid transparent;
     font-weight: 700;
     font-size: 0.82rem;

@@ -182,8 +182,8 @@
 
 <style>
   .chat-message {
-    max-width: min(85%, 30rem);
-    border-radius: 14px;
+    max-width: 100%;
+    border-radius: 0;
     padding: 0.7rem 0.85rem;
     display: grid;
     gap: 0.35rem;
@@ -191,16 +191,17 @@
 
   .chat-message.assistant {
     justify-self: start;
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
+    background: transparent;
+    border: none;
     color: var(--fg);
   }
 
   .chat-message.user {
-    justify-self: end;
-    background: var(--primary-bg);
-    border: 1px solid var(--primary-border);
-    color: var(--primary-fg);
+    justify-self: start;
+    background: transparent;
+    border: none;
+    border-left: 3px solid #EF7D31;
+    color: var(--fg);
   }
 
   .message-body {
@@ -214,13 +215,13 @@
     margin: 0;
     background: var(--input-bg);
     border: 1px solid var(--input-border);
-    border-radius: 10px;
+    border-radius: 2px;
     padding: 0.55rem;
     overflow-x: auto;
   }
 
   .message-body :global(code) {
-    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-family: 'JetBrains Mono', monospace;
     font-size: 0.83rem;
   }
 
@@ -245,7 +246,7 @@
     border: 1px solid var(--card-border);
     background: transparent;
     color: inherit;
-    border-radius: 999px;
+    border-radius: 2px;
     width: 34px;
     height: 28px;
     display: grid;

@@ -32,9 +32,7 @@
   }
 </script>
 
-<details class="settings-panel">
-  <summary>Settings</summary>
-
+<div class="settings-panel">
   <label for="voice-lang">Voice language</label>
   <select id="voice-lang" value={voiceLanguage} on:change={handleVoiceChange}>
     <option value="ja">JA</option>
@@ -69,31 +67,13 @@
   {/if}
 
   <button type="button" class="danger" on:click={forgetKey}>Forget Key</button>
-</details>
+</div>
 
 <style>
   .settings-panel {
-    border: 1px solid var(--session-border);
-    background: var(--session-bg);
-    border-radius: 12px;
     padding: 0.6rem;
     display: grid;
     gap: 0.45rem;
-  }
-
-  summary {
-    cursor: pointer;
-    list-style: none;
-    font-size: 0.8rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--label);
-    margin-bottom: 0.25rem;
-  }
-
-  summary::-webkit-details-marker {
-    display: none;
   }
 
   label {
@@ -110,7 +90,7 @@
 
   select {
     min-height: 40px;
-    border-radius: 10px;
+    border-radius: 2px;
     border: 1px solid var(--input-border);
     background: var(--input-bg);
     color: var(--input-fg);
@@ -119,7 +99,7 @@
 
   button {
     min-height: 40px;
-    border-radius: 10px;
+    border-radius: 2px;
     border: 1px solid var(--primary-border);
     background: var(--primary-bg);
     color: var(--primary-fg);

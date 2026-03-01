@@ -238,6 +238,38 @@ Primary theme is the terminal dark aesthetic described in "Visual Aesthetic" abo
 
 ---
 
+## Message Styling
+
+User messages render with `border-left: 3px solid #EF7D31` (Mistral orange), left-aligned, no bubble. Mirrors Vibe's `┃` blockquote bar. Assistant messages are plain left-aligned text, transparent background.
+
+---
+
+## Settings Panel
+
+Slides up from status bar on tap. Contains: voice language, auto-translate, theme, notifications, forget key. No `<details>`/`<summary>` wrapper — the panel is always visible when the settings drawer is open.
+
+---
+
+## Session Picker
+
+Slides down from header on tap. Contains: active sessions, older sessions, advanced/manual session ID. Extracted from the old sidebar session-controls into a dedicated `SessionPicker.svelte` component.
+
+---
+
+## Missing Functionality Notes
+
+UI elements that need backend work before they're fully functional:
+
+| UI Element | Backend Needed | Notes |
+|---|---|---|
+| Cancel button (Send → Cancel when running) | `POST /api/sessions/{id}/cancel` | InputBar shows Cancel when `agentState === 'running'` |
+| Cost/token ticker | Cost events over WebSocket | StatusLine shows `--` placeholder |
+| YOLO mode toggle | YOLO mode backend API | StatusLine center section reserved |
+| Talker mode | ElevenLabs TTS (WU-29/30) | MicButton tap-vs-hold, voice loop |
+| Cost overlay (tap ticker) | Cost events over WebSocket | Modal with big live numbers |
+
+---
+
 ## Known Issues to Fix
 
 - [ ] Wide content (long code lines, URLs) breaks horizontal layout — needs `overflow-x: auto` on cards, `word-break` on text

@@ -98,7 +98,7 @@
 <style>
   .tool-call-card {
     border: 1px solid var(--card-border);
-    border-radius: 12px;
+    border-radius: 2px;
     background: var(--card-bg-alt);
     overflow: hidden;
   }
@@ -126,7 +126,7 @@
     background: var(--secondary-bg);
     color: var(--secondary-fg);
     padding: 0.15rem 0.5rem;
-    border-radius: 999px;
+    border-radius: 2px;
     font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -150,7 +150,7 @@
     overflow-x: auto;
     font-size: 0.76rem;
     line-height: 1.35;
-    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    font-family: 'JetBrains Mono', monospace;
   }
 
   .result h4 {
@@ -176,7 +176,7 @@
   .diff-toggle {
     min-height: 36px;
     width: fit-content;
-    border-radius: 10px;
+    border-radius: 2px;
     border: 1px solid var(--secondary-border);
     background: var(--secondary-bg);
     color: var(--secondary-fg);

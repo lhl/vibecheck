@@ -34,6 +34,16 @@ function installWebSocketStub() {
   return StubWebSocket
 }
 
+async function openSessionPicker() {
+  const header = screen.getByText('vibecheck')
+  await fireEvent.click(header)
+}
+
+async function openSettings() {
+  const statusLine = screen.getByTestId('status-line')
+  await fireEvent.click(statusLine)
+}
+
 describe('App phase 4 shell', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -103,7 +113,7 @@ describe('App phase 4 shell', () => {
 
     render(App)
 
-    expect(screen.getByRole('heading', { name: 'vibecheck' })).toBeInTheDocument()
+    expect(screen.getByText('vibecheck')).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Message input' })).toHaveAttribute('placeholder', 'Send a message...')
   })
 
@@ -112,7 +122,7 @@ describe('App phase 4 shell', () => {
 
     render(App)
 
-    await fireEvent.click(screen.getByText('Settings'))
+    await openSettings()
     const button = screen.getByRole('button', { name: 'Auto-translate' })
     expect(button).toHaveTextContent('Enable auto-translate')
 
@@ -247,7 +257,10 @@ describe('App phase 4 shell', () => {
     localStorage.setItem('vibecheck_sid', 's-1')
 
     render(App)
-    await screen.findByRole('button', { name: /s-1/i })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('chat-scroll')).toBeInTheDocument()
+    })
 
     const stream = screen.getByTestId('chat-scroll')
     Object.defineProperty(stream, 'scrollHeight', { configurable: true, value: 1000 })
@@ -285,7 +298,8 @@ describe('App phase 4 shell', () => {
     appendEvent({ type: 'assistant', id: 'msg-switch-1', content: 'from session s-1' })
     expect(await screen.findByText('from session s-1')).toBeInTheDocument()
 
-    const picker = await screen.findByRole('button', { name: /s-2/i })
+    await openSessionPicker()
+    const picker = await screen.findByText('Second session')
     await fireEvent.click(picker)
 
     await waitFor(() => {
@@ -322,7 +336,8 @@ describe('App phase 4 shell', () => {
 
     render(App)
 
-    expect(await screen.findByRole('button', { name: /new session/i })).toBeInTheDocument()
+    await openSessionPicker()
+    expect(await screen.findByText('New session')).toBeInTheDocument()
   })
 
   it('resumes a disconnected session and reconnects websocket after refreshing sessions', async () => {
@@ -390,6 +405,8 @@ describe('App phase 4 shell', () => {
 
     appendEvent({ type: 'assistant', id: 'old-1', content: 'old timeline message' })
     expect(await screen.findByText('old timeline message')).toBeInTheDocument()
+
+    await openSessionPicker()
 
     const browse = await screen.findByText('Browse older sessions')
     const details = browse.closest('details')

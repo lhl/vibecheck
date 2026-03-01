@@ -116,7 +116,7 @@
     grid-template-columns: auto 1fr auto;
     gap: 0.5rem;
     border: 1px solid var(--card-border);
-    border-radius: 14px;
+    border-radius: 2px;
     background: var(--card-bg-alt);
     padding: 0.5rem;
   }
@@ -125,7 +125,7 @@
     resize: none;
     min-height: 42px;
     max-height: 150px;
-    border-radius: 10px;
+    border-radius: 2px;
     border: 1px solid var(--input-border);
     background: var(--input-bg);
     color: var(--input-fg);
@@ -140,7 +140,7 @@
 
   button {
     min-width: 72px;
-    border-radius: 10px;
+    border-radius: 2px;
     border: 1px solid var(--primary-border);
     background: var(--primary-bg);
     color: var(--primary-fg);

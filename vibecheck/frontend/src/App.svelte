@@ -2,9 +2,11 @@
   import { onDestroy, onMount, tick } from 'svelte'
   import ApprovalPanel from './components/ApprovalPanel.svelte'
   import ChatMessage from './components/ChatMessage.svelte'
-  import ConnectionStatus from './components/ConnectionStatus.svelte'
+  import HeaderBar from './components/HeaderBar.svelte'
   import InputBar from './components/InputBar.svelte'
+  import SessionPicker from './components/SessionPicker.svelte'
   import SettingsPanel from './components/SettingsPanel.svelte'
+  import StatusLine from './components/StatusLine.svelte'
   import ToolCallCard from './components/ToolCallCard.svelte'
   import {
     clearStoredPsk,
@@ -61,6 +63,8 @@
   let sessionsLoading = false
   let resumeBusy = ''
   let theme = loadThemePreference()
+  let sessionPickerOpen = false
+  let settingsOpen = false
 
   const EVENT_CACHE_PREFIX = 'vibecheck_events_'
   const EVENT_CACHE_LIMIT = 50
@@ -148,42 +152,6 @@
     return Number.isFinite(ms) ? ms : 0
   }
 
-  function formatRelative(value) {
-    const ms = parseIsoMs(value)
-    if (!ms) {
-      return ''
-    }
-
-    const deltaSeconds = Math.max(0, Math.floor((Date.now() - ms) / 1000))
-    if (deltaSeconds < 60) {
-      return `${deltaSeconds}s ago`
-    }
-    const minutes = Math.floor(deltaSeconds / 60)
-    if (minutes < 60) {
-      return `${minutes}m ago`
-    }
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) {
-      return `${hours}h ago`
-    }
-    const days = Math.floor(hours / 24)
-    return `${days}d ago`
-  }
-
-  function statusBadge(session) {
-    const status = session?.status || ''
-    if (status === 'waiting_approval' || status === 'waiting_input') {
-      return 'waiting'
-    }
-    if (status === 'running') {
-      return 'running'
-    }
-    if (status === 'idle') {
-      return 'idle'
-    }
-    return status || 'unknown'
-  }
-
   function sessionTitle(session) {
     if (session?.message_count === 0) {
       return 'New session'
@@ -195,17 +163,6 @@
     }
 
     return 'New session'
-  }
-
-  function sessionIdPreview(id) {
-    if (typeof id !== 'string') {
-      return ''
-    }
-    const trimmed = id.trim()
-    if (trimmed.length <= 10) {
-      return trimmed
-    }
-    return `${trimmed.slice(0, 8)}…`
   }
 
   function cacheKey(sessionId) {
@@ -480,6 +437,7 @@
     }
     sessionId = normalized
     storeSessionId(normalized)
+    sessionPickerOpen = false
     connectSocket()
   }
 
@@ -530,6 +488,20 @@
     }
     storeThemePreference(theme)
   }
+
+  function toggleSessionPicker() {
+    sessionPickerOpen = !sessionPickerOpen
+  }
+
+  function toggleSettings() {
+    settingsOpen = !settingsOpen
+  }
+
+  $: activeSessionTitle = (() => {
+    const match = sessions.find((s) => s?.id === sessionId)
+    if (!match) return ''
+    return sessionTitle(match)
+  })()
 
   async function toggleNotifications() {
     if (!pushSupported || notificationsBusy) {
@@ -678,125 +650,31 @@
   </main>
 {:else}
   <div class="shell">
-    <header class="app-header">
-      <h1>vibecheck</h1>
-      <ConnectionStatus status={$connection.status} reconnectAttempts={$connection.reconnectAttempts} />
-    </header>
+    <HeaderBar
+      connectionStatus={$connection.status}
+      reconnectAttempts={$connection.reconnectAttempts}
+      {activeSessionTitle}
+      pickerOpen={sessionPickerOpen}
+      onTogglePicker={toggleSessionPicker}
+    />
 
-    <section class="session-controls">
-      <div class="session-header">
-        <h2>Sessions</h2>
-        <button type="button" class="secondary" on:click={refreshSessions} disabled={sessionsLoading}>
-          {sessionsLoading ? 'Refreshing…' : 'Refresh'}
-        </button>
-      </div>
-
-      {#if activeSessions.length > 0}
-        <p class="section-label">Active</p>
-        <ul class="session-list" aria-label="Active sessions">
-          {#each activeSessions as session}
-            <li>
-              <button
-                type="button"
-                class="session-item"
-                class:selected={session.id === sessionId}
-                on:click={() => switchSession(session.id)}
-              >
-                <div class="row">
-                  <span class="session-title">{sessionTitle(session)}</span>
-                  <span class="status {statusBadge(session)}">{statusBadge(session)}</span>
-                </div>
-                <div class="row meta-line">
-                  <span class="meta">started {formatRelative(session.started_at || session.last_activity)}</span>
-                  {#if session.last_activity}
-                    <span class="meta">active {formatRelative(session.last_activity)}</span>
-                  {/if}
-                  <span class="meta">{session.message_count || 0} msgs</span>
-                  <span class="meta mono" title={session.id}>{sessionIdPreview(session.id)}</span>
-                </div>
-              </button>
-            </li>
-          {/each}
-        </ul>
-      {:else}
-        <p class="meta">No active sessions detected.</p>
-      {/if}
-
-      <details class="older-sessions">
-        <summary>Browse older sessions</summary>
-        {#if olderSessions.length === 0}
-          <p class="meta">No older sessions found.</p>
-        {:else}
-          <ul class="session-list" aria-label="Older sessions">
-            {#each olderSessions as session}
-              <li class="session-old">
-                <div class="session-old-meta">
-                  <p class="session-old-title">{sessionTitle(session)}</p>
-                  <p class="meta">
-                    started {formatRelative(session.started_at || session.last_activity)}
-                    {#if session.last_activity}
-                      · active {formatRelative(session.last_activity)}
-                    {/if}
-                    · {session.message_count || 0} msgs
-                  </p>
-                  <p class="meta mono" title={session.id}>{sessionIdPreview(session.id)}</p>
-                </div>
-                <button
-                  type="button"
-                  class="secondary"
-                  on:click={() => resumeSession(session.id)}
-                  disabled={resumeBusy === session.id}
-                >
-                  {resumeBusy === session.id ? 'Resuming…' : 'Resume'}
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </details>
-
-      <details class="advanced">
-        <summary>Advanced</summary>
-        <label for="session-id">Session ID</label>
-        <input
-          id="session-id"
-          value={sessionId}
-          placeholder="Session ID"
-          on:change={handleSessionInput}
-        />
-
-        <div class="control-actions">
-          <button
-            type="button"
-            on:click={connectSocket}
-            disabled={!sessionId || !isConnectableSession(sessionId)}
-          >
-            Connect
-          </button>
-          <button type="button" class="secondary" on:click={disconnectSocket}>Disconnect</button>
-        </div>
-      </details>
-
-      <SettingsPanel
-        {voiceLanguage}
-        {autoTranslateEnabled}
-        {notificationsEnabled}
-        {pushSupported}
-        {notificationsBusy}
-        {notificationsError}
-        {theme}
-        on:voiceLanguageChange={handleVoiceLanguageChange}
-        on:toggleTranslate={toggleAutoTranslate}
-        on:toggleNotifications={toggleNotifications}
-        on:cycleTheme={cycleTheme}
-        on:forgetKey={clearPsk}
-      />
-
-      <p class="meta">state: {latestState?.state || 'unknown'}</p>
-      {#if sessionError}
-        <p class="error">{sessionError}</p>
-      {/if}
-    </section>
+    <SessionPicker
+      {sessions}
+      {activeSessions}
+      {olderSessions}
+      {sessionId}
+      {sessionsLoading}
+      {sessionError}
+      {resumeBusy}
+      open={sessionPickerOpen}
+      onSwitchSession={switchSession}
+      onResumeSession={resumeSession}
+      onRefresh={refreshSessions}
+      onSessionInput={handleSessionInput}
+      onConnect={connectSocket}
+      onDisconnect={disconnectSocket}
+      {isConnectableSession}
+    />
 
     <section class="timeline-wrap">
       <div class="timeline" bind:this={streamElement} on:scroll={onStreamScroll} data-testid="chat-scroll">
@@ -843,109 +721,64 @@
         onSubmitted={handleSubmitted}
       />
     </footer>
+
+    <div class="settings-drawer" class:open={settingsOpen}>
+      <SettingsPanel
+        {voiceLanguage}
+        {autoTranslateEnabled}
+        {notificationsEnabled}
+        {pushSupported}
+        {notificationsBusy}
+        {notificationsError}
+        {theme}
+        on:voiceLanguageChange={handleVoiceLanguageChange}
+        on:toggleTranslate={toggleAutoTranslate}
+        on:toggleNotifications={toggleNotifications}
+        on:cycleTheme={cycleTheme}
+        on:forgetKey={clearPsk}
+      />
+    </div>
+
+    <StatusLine
+      agentState={latestState?.state || 'unknown'}
+      {sessionError}
+      onSettingsToggle={toggleSettings}
+      {settingsOpen}
+    />
   </div>
 {/if}
 
 <style>
   :global(html) {
-    --bg:
-      radial-gradient(circle at 15% 10%, #20304f, transparent 35%),
-      radial-gradient(circle at 90% 5%, #4f2d19, transparent 28%),
-      #0d111b;
-    --fg: #eef3ff;
-    --card-border: #334766;
-    --card-border-strong: #43557a;
-    --card-bg: linear-gradient(165deg, #1c2438, #111a2a);
-    --card-bg-alt: linear-gradient(160deg, #1b2438, #12192a);
-    --text-muted: #bbc7e2;
-    --label: #9eb0d5;
-    --input-border: #405475;
-    --input-bg: #0f1727;
-    --input-fg: #dce8ff;
-    --primary-border: #8a6346;
-    --primary-bg: #362416;
+    --bg: #1a1a1a;
+    --fg: #e0e0e0;
+    --card-border: rgba(255,255,255,0.1);
+    --card-border-strong: rgba(255,255,255,0.15);
+    --card-bg: #2a2a2a;
+    --card-bg-alt: #252525;
+    --text-muted: #888;
+    --label: #888;
+    --input-border: rgba(255,255,255,0.12);
+    --input-bg: #1a1a1a;
+    --input-fg: #e0e0e0;
+    --primary-border: #EF7D31;
+    --primary-bg: #3a2010;
     --primary-fg: #ffe1c6;
-    --secondary-border: #48628c;
-    --secondary-bg: #1a2740;
-    --secondary-fg: #d3e5ff;
+    --secondary-border: rgba(255,255,255,0.15);
+    --secondary-bg: #333;
+    --secondary-fg: #e0e0e0;
     --danger-border: #8b4a4a;
     --danger-bg: #351819;
     --danger-fg: #ffd1d1;
-    --meta: #9eb0d5;
+    --meta: #888;
     --error: #ffbbbb;
-    --empty: #afbdd9;
-    --session-bg: rgb(8 12 22 / 0.25);
-    --session-border: #2d3852;
-    --session-selected: #3b6ea7;
-    --session-status-waiting: #cb6c29;
-    --session-status-running: #4f6a9d;
-    --session-status-idle: #48628c;
-  }
-
-  @media (prefers-color-scheme: light) {
-    :global(html:not([data-theme])) {
-      --bg: #f6f8ff;
-      --fg: #111827;
-      --card-border: #c7d3eb;
-      --card-border-strong: #c7d3eb;
-      --card-bg: #ffffff;
-      --card-bg-alt: #ffffff;
-      --text-muted: #475569;
-      --label: #475569;
-      --input-border: #c7d3eb;
-      --input-bg: #ffffff;
-      --input-fg: #111827;
-      --primary-border: #2563eb;
-      --primary-bg: #2563eb;
-      --primary-fg: #ffffff;
-      --secondary-border: #cbd5e1;
-      --secondary-bg: #e2e8f0;
-      --secondary-fg: #0f172a;
-      --danger-border: #fecaca;
-      --danger-bg: #fee2e2;
-      --danger-fg: #7f1d1d;
-      --meta: #475569;
-      --error: #b91c1c;
-      --empty: #475569;
-      --session-bg: rgb(15 23 42 / 0.04);
-      --session-border: #cbd5e1;
-      --session-selected: #2563eb;
-      --session-status-waiting: #b45309;
-      --session-status-running: #2563eb;
-      --session-status-idle: #64748b;
-    }
-  }
-
-  :global(html[data-theme='light']) {
-    --bg: #f6f8ff;
-    --fg: #111827;
-    --card-border: #c7d3eb;
-    --card-border-strong: #c7d3eb;
-    --card-bg: #ffffff;
-    --card-bg-alt: #ffffff;
-    --text-muted: #475569;
-    --label: #475569;
-    --input-border: #c7d3eb;
-    --input-bg: #ffffff;
-    --input-fg: #111827;
-    --primary-border: #2563eb;
-    --primary-bg: #2563eb;
-    --primary-fg: #ffffff;
-    --secondary-border: #cbd5e1;
-    --secondary-bg: #e2e8f0;
-    --secondary-fg: #0f172a;
-    --danger-border: #fecaca;
-    --danger-bg: #fee2e2;
-    --danger-fg: #7f1d1d;
-    --meta: #475569;
-    --error: #b91c1c;
-    --empty: #475569;
-    --session-bg: rgb(15 23 42 / 0.04);
-    --session-border: #cbd5e1;
-    --session-selected: #2563eb;
-    --session-status-waiting: #b45309;
-    --session-status-running: #2563eb;
-    --session-status-idle: #64748b;
+    --empty: #888;
+    --session-bg: #222;
+    --session-border: rgba(255,255,255,0.1);
+    --session-selected: #EF7D31;
+    --session-status-waiting: #EF7D31;
+    --session-status-running: #888;
+    --session-status-idle: #555;
   }
 
   :global(body) {
@@ -953,7 +786,7 @@
     min-height: 100%;
     background: var(--bg);
     color: var(--fg);
-    font-family: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
+    font-family: 'JetBrains Mono', monospace;
   }
 
   .psk-gate {
@@ -966,7 +799,7 @@
   .gate-card {
     width: min(100%, 26rem);
     border: 1px solid var(--card-border-strong);
-    border-radius: 16px;
+    border-radius: 2px;
     background: var(--card-bg-alt);
     padding: 1rem;
     display: grid;
@@ -984,197 +817,6 @@
     line-height: 1.4;
   }
 
-  .shell {
-    display: grid;
-    grid-template-rows: auto auto 1fr auto;
-    gap: 0.75rem;
-    min-height: 100dvh;
-    margin: 0 auto;
-    width: min(100%, 460px);
-    padding:
-      calc(0.8rem + env(safe-area-inset-top))
-      calc(0.8rem + env(safe-area-inset-right))
-      calc(0.8rem + env(safe-area-inset-bottom))
-      calc(0.8rem + env(safe-area-inset-left));
-  }
-
-  .app-header,
-  .session-controls,
-  .timeline,
-  .composer {
-    border: 1px solid var(--card-border);
-    border-radius: 16px;
-    background: var(--card-bg);
-  }
-
-  .app-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.75rem;
-  }
-
-  .app-header h1 {
-    margin: 0;
-    font-size: 1.08rem;
-    letter-spacing: 0.02em;
-  }
-
-  .session-controls {
-    padding: 0.75rem;
-    display: grid;
-    gap: 0.45rem;
-  }
-
-  .session-controls label {
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--label);
-  }
-
-  .session-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.6rem;
-  }
-
-  .session-header h2 {
-    margin: 0;
-    font-size: 0.9rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-
-  .section-label {
-    margin: 0.35rem 0 0;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--label);
-  }
-
-  .session-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: grid;
-    gap: 0.45rem;
-  }
-
-  .session-item {
-    width: 100%;
-    text-align: left;
-    padding: 0.65rem;
-    border: 1px solid var(--session-border);
-    background: var(--session-bg);
-    color: inherit;
-    border-radius: 12px;
-    display: grid;
-    gap: 0.35rem;
-    cursor: pointer;
-  }
-
-  .session-item.selected {
-    border-color: var(--session-selected);
-    box-shadow: 0 0 0 1px var(--session-selected);
-  }
-
-  .row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.6rem;
-  }
-
-  .meta-line {
-    flex-wrap: wrap;
-    justify-content: flex-start;
-  }
-
-  .session-title {
-    font-weight: 700;
-    font-size: 0.88rem;
-  }
-
-  .status {
-    border: 1px solid var(--session-status-idle);
-    background: color-mix(in srgb, var(--session-status-idle) 18%, transparent);
-    color: var(--fg);
-    border-radius: 999px;
-    padding: 0.1rem 0.55rem;
-    font-size: 0.68rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    flex: 0 0 auto;
-  }
-
-  .status.waiting {
-    border-color: var(--session-status-waiting);
-    background: color-mix(in srgb, var(--session-status-waiting) 18%, transparent);
-  }
-
-  .status.running {
-    border-color: var(--session-status-running);
-    background: color-mix(in srgb, var(--session-status-running) 18%, transparent);
-  }
-
-  .status.idle {
-    border-color: var(--session-status-idle);
-    background: color-mix(in srgb, var(--session-status-idle) 18%, transparent);
-  }
-
-  .mono {
-    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
-    font-size: 0.72rem;
-    word-break: break-all;
-  }
-
-  .session-controls details {
-    border: 1px solid var(--session-border);
-    background: var(--session-bg);
-    border-radius: 12px;
-    padding: 0.6rem;
-  }
-
-  .session-controls summary {
-    cursor: pointer;
-    list-style: none;
-    font-size: 0.72rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--label);
-  }
-
-  .session-controls summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .session-old {
-    display: flex;
-    gap: 0.6rem;
-    justify-content: space-between;
-    align-items: flex-start;
-  }
-
-  .session-old-meta {
-    display: grid;
-    gap: 0.2rem;
-    min-width: 0;
-  }
-
-  .session-old-title {
-    margin: 0;
-    font-weight: 800;
-    font-size: 0.85rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   input,
   button {
     font: inherit;
@@ -1182,63 +824,44 @@
 
   input {
     min-height: 40px;
-    border-radius: 10px;
+    border-radius: 2px;
     border: 1px solid var(--input-border);
     background: var(--input-bg);
     color: var(--input-fg);
     padding: 0 0.7rem;
   }
 
-  .control-actions {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.45rem;
-    margin-top: 0.3rem;
-  }
-
   button {
     min-height: 40px;
-    border-radius: 10px;
+    border-radius: 2px;
     border: 1px solid var(--primary-border);
     background: var(--primary-bg);
     color: var(--primary-fg);
     font-weight: 700;
   }
 
-  button.secondary {
-    border-color: var(--secondary-border);
-    background: var(--secondary-bg);
-    color: var(--secondary-fg);
-  }
-
   button:disabled {
     opacity: 0.58;
   }
 
-  .meta,
-  .error {
-    margin: 0;
-    font-size: 0.76rem;
-  }
-
-  .meta {
-    color: var(--meta);
-  }
-
-  .error {
-    color: var(--error);
+  .shell {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    margin: 0 auto;
+    width: min(100%, 600px);
   }
 
   .timeline-wrap {
-    position: relative;
+    flex: 1;
     min-height: 0;
+    position: relative;
   }
 
   .timeline {
     height: 100%;
-    max-height: calc(100dvh - 350px);
-    min-height: 220px;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 0.75rem;
     display: grid;
     gap: 0.55rem;
@@ -1258,51 +881,31 @@
     bottom: 0.75rem;
     min-height: 36px;
     min-width: 148px;
-    border-radius: 999px;
-    border-color: #3b6ea7;
-    background: #16335a;
-    color: #d0e9ff;
-    box-shadow: 0 10px 25px rgb(7 12 24 / 0.35);
+    border-radius: 2px;
+    border-color: var(--primary-border);
+    background: var(--primary-bg);
+    color: var(--primary-fg);
+    box-shadow: 0 10px 25px rgb(0 0 0 / 0.35);
   }
 
   .composer {
     padding: 0.65rem;
     display: grid;
     gap: 0.55rem;
+    border-top: 1px solid var(--card-border);
+    background: var(--card-bg);
   }
 
-  @media (min-width: 700px) {
-    .shell {
-      width: min(100%, 760px);
-      grid-template-columns: 260px 1fr;
-      grid-template-rows: auto 1fr auto;
-      grid-template-areas:
-        'header header'
-        'controls stream'
-        'composer composer';
-    }
+  .settings-drawer {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.3s ease;
+    background: var(--card-bg);
+    border-top: 1px solid var(--card-border);
+  }
 
-    .app-header {
-      grid-area: header;
-    }
-
-    .session-controls {
-      grid-area: controls;
-      align-self: start;
-      position: sticky;
-      top: 0;
-    }
-
-    .timeline-wrap {
-      grid-area: stream;
-    }
-
-    .timeline {
-      max-height: calc(100dvh - 210px);
-    }
-
-    .composer {
-      grid-area: composer;
-    }
+  .settings-drawer.open {
+    max-height: 50vh;
+    overflow-y: auto;
   }
 </style>

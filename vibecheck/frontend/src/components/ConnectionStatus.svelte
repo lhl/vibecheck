@@ -34,7 +34,7 @@
   .dot {
     width: 0.6rem;
     height: 0.6rem;
-    border-radius: 999px;
+    border-radius: 50%;
     background: #d85c5c;
     box-shadow: 0 0 0 3px rgb(216 92 92 / 0.2);
   }
