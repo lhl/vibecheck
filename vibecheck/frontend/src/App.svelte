@@ -1367,7 +1367,7 @@
   .picker-backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.95);
+    background: rgba(0, 0, 0, 0.90);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
     z-index: 10;
