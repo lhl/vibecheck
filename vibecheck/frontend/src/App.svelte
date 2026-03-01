@@ -64,6 +64,8 @@
   let talkerActive = false
   let talkerState = 'idle'
   let talkerAudio = null
+  let talkerTtsAbort = null
+  let talkerSubmitAssistantCount = 0
 
   const EVENT_CACHE_PREFIX = 'vibecheck_events_'
   const EVENT_CACHE_LIMIT = 50
@@ -647,6 +649,10 @@
       // Exiting talker mode
       talkerActive = false
       talkerState = 'idle'
+      if (talkerTtsAbort) {
+        talkerTtsAbort.abort()
+        talkerTtsAbort = null
+      }
       stopTalkerAudio()
       await destroyVAD()
     } else {
@@ -705,6 +711,9 @@
         return
       }
 
+      // Snapshot assistant count before submission so we only speak new responses
+      talkerSubmitAssistantCount = timeline.filter((e) => e.type === 'assistant').length
+
       // Submit the transcribed text as a message
       talkerState = 'running'
       const endpoint = $pendingInput ? 'input' : 'message'
@@ -757,13 +766,22 @@
 
   async function talkerSpeak(text) {
     if (!talkerActive || !text) {
-      talkerState = 'listening'
-      await resumeVAD()
+      if (talkerActive) {
+        talkerState = 'listening'
+        await resumeVAD()
+      }
       return
     }
 
     talkerState = 'speaking'
     stopTalkerAudio()
+
+    // Abort any previous in-flight TTS fetch
+    if (talkerTtsAbort) {
+      talkerTtsAbort.abort()
+    }
+    const abort = new AbortController()
+    talkerTtsAbort = abort
 
     try {
       const response = await fetch('/api/voice/synthesize', {
@@ -773,7 +791,10 @@
           ...(psk ? { 'X-PSK': psk } : {}),
         },
         body: JSON.stringify({ text }),
+        signal: abort.signal,
       })
+
+      if (!talkerActive) return  // exited during fetch
 
       if (!response.ok) {
         console.warn('[talker] TTS failed:', response.status)
@@ -783,6 +804,8 @@
       }
 
       const blob = await response.blob()
+      if (!talkerActive) return  // exited during blob read
+
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
       talkerAudio = audio
@@ -805,28 +828,42 @@
         }
       }
 
+      if (!talkerActive) {  // exited before play
+        URL.revokeObjectURL(url)
+        return
+      }
+
       await audio.play()
     } catch (error) {
+      if (error?.name === 'AbortError') return  // intentional abort on toggle-off
       console.warn('[talker] TTS error:', error)
       if (talkerActive) {
         talkerState = 'listening'
         await resumeVAD()
       }
+    } finally {
+      if (talkerTtsAbort === abort) {
+        talkerTtsAbort = null
+      }
     }
   }
 
-  // Watch agent state for completion while talker mode is running
-  // When state transitions to idle/waiting, grab last assistant message and speak it
+  // Watch agent state for completion while talker mode is running.
+  // Only trigger TTS when state transitions to 'idle' (not waiting_approval
+  // or waiting_input, which don't mean the agent finished a response).
+  // Only speak assistant events that arrived *after* the submission.
   let talkerPrevAgentState = ''
   $: {
     const currentAgentState = latestState?.state || 'unknown'
     if (talkerActive && talkerState === 'running') {
       const wasActive = talkerPrevAgentState === 'running' || talkerPrevAgentState === 'tool_running'
-      const isNowIdle = currentAgentState === 'idle' || currentAgentState === 'waiting_input' || currentAgentState === 'waiting_approval'
+      const isNowIdle = currentAgentState === 'idle'
       if (wasActive && isNowIdle) {
         const assistantEvents = timeline.filter((e) => e.type === 'assistant')
-        if (assistantEvents.length > 0) {
-          const latest = assistantEvents[assistantEvents.length - 1]
+        // Only consider assistant events that arrived after we submitted
+        const newEvents = assistantEvents.slice(talkerSubmitAssistantCount)
+        if (newEvents.length > 0) {
+          const latest = newEvents[newEvents.length - 1]
           const content = typeof latest?.content === 'string' ? latest.content.trim() : ''
           if (content) {
             talkerSpeak(content)

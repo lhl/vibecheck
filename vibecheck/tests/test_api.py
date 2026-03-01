@@ -308,6 +308,8 @@ async def test_fleet_state_aggregates(api_client) -> None:
         ("post", "/api/push/unsubscribe", {"endpoint": "https://example.com/push/abc"}),
         ("post", "/api/translate", {"text": "Hello", "target_lang": "ja"}),
         ("post", "/api/voice/transcribe", {"fake": "audio"}),
+        ("get", "/api/voice/voices", None),
+        ("post", "/api/voice/synthesize", {"text": "hello"}),
     ],
 )
 async def test_protected_endpoints_require_psk(api_client, method: str, path: str, json_body: dict | None) -> None:
