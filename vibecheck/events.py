@@ -85,6 +85,16 @@ class HeartbeatEvent(EventBase):
     type: Literal["heartbeat"] = "heartbeat"
 
 
+class StatsEvent(EventBase):
+    type: Literal["stats"] = "stats"
+    session_cost: float = 0.0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    steps: int = 0
+    is_local: bool = False
+
+
 Event = Annotated[
     AssistantEvent
     | ToolCallEvent
@@ -96,7 +106,8 @@ Event = Annotated[
     | StateChangeEvent
     | UserMessageEvent
     | ConnectedEvent
-    | HeartbeatEvent,
+    | HeartbeatEvent
+    | StatsEvent,
     Field(discriminator="type"),
 ]
 

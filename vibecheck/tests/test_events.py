@@ -11,6 +11,7 @@ from vibecheck.events import (
     EventAdapter,
     InputRequestEvent,
     StateChangeEvent,
+    StatsEvent,
     ToolCallEvent,
     ToolResultEvent,
     UserMessageEvent,
@@ -26,6 +27,14 @@ def test_event_round_trip_for_each_type() -> None:
         InputRequestEvent(request_id="req-1", question="Continue?", options=["yes", "no"]),
         StateChangeEvent(state="running"),
         UserMessageEvent(content="please run tests"),
+        StatsEvent(
+            session_cost=0.0042,
+            prompt_tokens=5000,
+            completion_tokens=1000,
+            total_tokens=6000,
+            steps=3,
+            is_local=False,
+        ),
     ]
 
     for event in events:

@@ -21,6 +21,7 @@ from vibecheck.events import (
     InputRequestEvent,
     InputResolutionEvent,
     StateChangeEvent,
+    StatsEvent,
     ToolCallEvent,
     ToolResultEvent,
     UserMessageEvent,
@@ -1100,6 +1101,7 @@ class SessionBridge:
                     and self._message_queue.empty()
                 ):
                     self._set_state("idle")
+                self._broadcast_stats()
 
     def _ensure_message_worker(self) -> None:
         if self._message_worker_task is not None and not self._message_worker_task.done():
@@ -1202,6 +1204,9 @@ class SessionBridge:
             "attach_mode": self.attach_mode,
             "controllable": self.controllable,
         }
+        stats_event = self._build_stats_event()
+        if stats_event is not None:
+            payload["stats"] = stats_event.model_dump(mode="json")
         if self.pending_approval:
             call_id = next(iter(self.pending_approval.keys()))
             context = self.pending_approval_context.get(call_id, {})
@@ -1221,6 +1226,37 @@ class SessionBridge:
                 pending["options"] = context["options"]
             payload["pending_input"] = pending
         return payload
+
+    def _build_stats_event(self) -> StatsEvent | None:
+        loop = self._agent_loop
+        if loop is None:
+            return None
+        stats = getattr(loop, "stats", None)
+        if stats is None:
+            return None
+        prompt_tokens = getattr(stats, "session_prompt_tokens", 0) or 0
+        completion_tokens = getattr(stats, "session_completion_tokens", 0) or 0
+        total_tokens = prompt_tokens + completion_tokens
+        input_price = getattr(stats, "input_price_per_million", 0.0) or 0.0
+        output_price = getattr(stats, "output_price_per_million", 0.0) or 0.0
+        is_local = input_price == 0.0 and output_price == 0.0
+        session_cost = 0.0 if is_local else (
+            (prompt_tokens / 1_000_000) * input_price
+            + (completion_tokens / 1_000_000) * output_price
+        )
+        return StatsEvent(
+            session_cost=session_cost,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            steps=getattr(stats, "steps", 0) or 0,
+            is_local=is_local,
+        )
+
+    def _broadcast_stats(self) -> None:
+        event = self._build_stats_event()
+        if event is not None:
+            self._broadcast_background(event)
 
 
 class SessionManager:

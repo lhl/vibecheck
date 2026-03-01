@@ -81,6 +81,15 @@ export const pendingApproval = derived(events, ($events) => {
   return null
 })
 
+export const latestStats = derived(events, ($events) => {
+  for (let i = $events.length - 1; i >= 0; i--) {
+    if ($events[i].type === 'stats') {
+      return $events[i]
+    }
+  }
+  return null
+})
+
 export const pendingInput = derived(events, ($events) => {
   const resolvedRequestIds = new Set()
 

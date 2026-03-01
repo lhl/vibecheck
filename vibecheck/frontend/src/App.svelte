@@ -28,6 +28,7 @@
   import {
     appendEvent,
     events,
+    latestStats,
     mergeEvents,
     pendingApproval,
     pendingInput,
@@ -86,6 +87,17 @@
     event.type === 'assistant' || event.type === 'user_message' || event.type === 'tool_call',
   )
   $: latestState = [...$events].reverse().find((event) => event.type === 'state') || null
+
+  function formatCost(stats) {
+    if (!stats) return '--'
+    const tokens = stats.total_tokens || 0
+    const tokenStr = tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}K` : `${tokens}`
+    if (stats.is_local) return `FREE | ${tokenStr} tok`
+    const cost = stats.session_cost || 0
+    return `$${cost.toFixed(4)} | ${tokenStr} tok`
+  }
+
+  $: costDisplay = formatCost($latestStats)
 
   $: {
     const callId = $pendingApproval?.call_id || ''
@@ -1217,6 +1229,7 @@
       {sessionError}
       onSettingsToggle={toggleSettings}
       {settingsOpen}
+      {costDisplay}
     />
   </div>
 {/if}

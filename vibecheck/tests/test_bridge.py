@@ -1059,3 +1059,116 @@ async def test_late_local_input_task_skips_after_mobile_resolution(
     assert owner._pending_question is None
     await _wait_until(lambda: bridge.state == "idle")
     bridge.stop()
+
+
+# ---- Stats event tests ----
+
+
+class FakeStats:
+    def __init__(
+        self,
+        session_prompt_tokens: int = 0,
+        session_completion_tokens: int = 0,
+        input_price_per_million: float = 0.0,
+        output_price_per_million: float = 0.0,
+        steps: int = 0,
+    ) -> None:
+        self.session_prompt_tokens = session_prompt_tokens
+        self.session_completion_tokens = session_completion_tokens
+        self.input_price_per_million = input_price_per_million
+        self.output_price_per_million = output_price_per_million
+        self.steps = steps
+
+
+def test_build_stats_event_with_remote_model() -> None:
+    bridge = SessionBridge("stats-remote")
+    loop = type("Loop", (), {"stats": FakeStats(
+        session_prompt_tokens=10000,
+        session_completion_tokens=2000,
+        input_price_per_million=0.40,
+        output_price_per_million=2.00,
+        steps=5,
+    )})()
+    bridge._agent_loop = loop
+    event = bridge._build_stats_event()
+    assert event is not None
+    assert event.type == "stats"
+    assert event.prompt_tokens == 10000
+    assert event.completion_tokens == 2000
+    assert event.total_tokens == 12000
+    assert event.steps == 5
+    assert event.is_local is False
+    expected_cost = (10000 / 1_000_000) * 0.40 + (2000 / 1_000_000) * 2.00
+    assert abs(event.session_cost - expected_cost) < 1e-9
+
+
+def test_build_stats_event_local_model_is_free() -> None:
+    bridge = SessionBridge("stats-local")
+    loop = type("Loop", (), {"stats": FakeStats(
+        session_prompt_tokens=50000,
+        session_completion_tokens=10000,
+        input_price_per_million=0.0,
+        output_price_per_million=0.0,
+        steps=10,
+    )})()
+    bridge._agent_loop = loop
+    event = bridge._build_stats_event()
+    assert event is not None
+    assert event.is_local is True
+    assert event.session_cost == 0.0
+    assert event.total_tokens == 60000
+
+
+def test_build_stats_event_no_agent_loop() -> None:
+    bridge = SessionBridge("stats-none")
+    assert bridge._build_stats_event() is None
+
+
+def test_build_stats_event_no_stats_attr() -> None:
+    bridge = SessionBridge("stats-no-attr")
+    bridge._agent_loop = object()
+    assert bridge._build_stats_event() is None
+
+
+def test_state_payload_includes_stats_when_loop_has_stats() -> None:
+    bridge = SessionBridge("stats-payload")
+    loop = type("Loop", (), {"stats": FakeStats(
+        session_prompt_tokens=1000,
+        session_completion_tokens=500,
+        input_price_per_million=0.40,
+        output_price_per_million=2.00,
+        steps=2,
+    )})()
+    bridge._agent_loop = loop
+    payload = bridge.state_payload()
+    assert "stats" in payload
+    stats = payload["stats"]
+    assert stats["type"] == "stats"
+    assert stats["prompt_tokens"] == 1000
+    assert stats["completion_tokens"] == 500
+    assert stats["total_tokens"] == 1500
+    assert stats["is_local"] is False
+
+
+def test_state_payload_no_stats_without_agent_loop() -> None:
+    bridge = SessionBridge("stats-no-loop")
+    payload = bridge.state_payload()
+    assert "stats" not in payload
+
+
+@pytest.mark.asyncio
+async def test_broadcast_stats_sends_event() -> None:
+    cm = RecordingConnectionManager()
+    bridge = SessionBridge("stats-broadcast", connection_manager=cm)
+    loop = type("Loop", (), {"stats": FakeStats(
+        session_prompt_tokens=100,
+        session_completion_tokens=50,
+        steps=1,
+    )})()
+    bridge._agent_loop = loop
+    bridge._broadcast_stats()
+    await asyncio.sleep(0)  # let background task run
+    stats_events = [e for _, e in cm.events if e.get("type") == "stats"]
+    assert len(stats_events) == 1
+    assert stats_events[0]["total_tokens"] == 150
+    assert stats_events[0]["is_local"] is True

@@ -118,6 +118,9 @@ async def events(websocket: WebSocket, session_id: str) -> None:
     )
     for event in bridge.backlog():
         await manager.send_personal(websocket, event)
+    stats_event = bridge._build_stats_event()
+    if stats_event is not None:
+        await manager.send_personal(websocket, stats_event)
 
     heartbeat_task = asyncio.create_task(_send_heartbeats(websocket))
 
