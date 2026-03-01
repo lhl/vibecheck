@@ -12,7 +12,6 @@
     clearStoredPsk,
     clearStoredSessionId,
     loadInitialPsk,
-    loadStoredSessionId,
     storePsk,
     storeSessionId,
   } from './lib/auth'
@@ -41,7 +40,7 @@
 
   const query = new URLSearchParams(window.location.search)
 
-  const initialSessionId = query.get('sid') || query.get('session_id') || loadStoredSessionId() || ''
+  const initialSessionId = query.get('sid') || query.get('session_id') || ''
   const initialAction = query.get('action') || ''
   const initialCallId = query.get('call_id') || ''
 
@@ -324,15 +323,6 @@
       const payload = await apiJson('/api/sessions')
       sessions = Array.isArray(payload) ? payload : []
       sessionError = ''
-
-      if (!sessionId && sessions.length > 0) {
-        const active = [...sessions]
-          .filter((session) => session?.status && session.status !== 'disconnected' && session.controllable)
-          .sort((a, b) => parseIsoMs(b.started_at || b.last_activity) - parseIsoMs(a.started_at || a.last_activity))
-        if (active.length > 0) {
-          sessionId = active[0].id
-        }
-      }
 
       if (sessionId) {
         storeSessionId(sessionId)

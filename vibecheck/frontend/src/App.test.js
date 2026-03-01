@@ -254,7 +254,7 @@ describe('App phase 4 shell', () => {
 
   it('shows new message button when user is scrolled up', async () => {
     localStorage.setItem('vibecheck_psk', 'dev-psk')
-    localStorage.setItem('vibecheck_sid', 's-1')
+    window.history.pushState({}, '', '/?sid=s-1')
 
     render(App)
 
@@ -277,7 +277,7 @@ describe('App phase 4 shell', () => {
 
   it('does not optimistically append a user bubble before websocket echo', async () => {
     localStorage.setItem('vibecheck_psk', 'dev-psk')
-    localStorage.setItem('vibecheck_sid', 's-1')
+    window.history.pushState({}, '', '/?sid=s-1')
     setConnection('connected', 0)
 
     render(App)
@@ -291,7 +291,7 @@ describe('App phase 4 shell', () => {
 
   it('clears timeline when switching sessions', async () => {
     localStorage.setItem('vibecheck_psk', 'dev-psk')
-    localStorage.setItem('vibecheck_sid', 's-1')
+    window.history.pushState({}, '', '/?sid=s-1')
 
     render(App)
 
