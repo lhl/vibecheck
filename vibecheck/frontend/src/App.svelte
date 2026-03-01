@@ -850,16 +850,17 @@
   }
 
   .shell {
+    position: fixed;
+    inset: 0;
     display: flex;
     flex-direction: column;
-    height: 100dvh;
     margin: 0 auto;
     width: min(100%, 600px);
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
-    box-sizing: border-box;
+    overflow: hidden;
   }
 
   .timeline-wrap {
@@ -899,6 +900,7 @@
   }
 
   .composer {
+    flex-shrink: 0;
     padding: 0.65rem;
     display: grid;
     gap: 0.55rem;

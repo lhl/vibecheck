@@ -154,13 +154,15 @@
 
 <style>
   .session-picker {
+    flex-shrink: 1;
+    min-height: 0;
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.3s ease;
   }
 
   .session-picker.open {
-    max-height: 70vh;
+    max-height: 60vh;
     overflow-y: auto;
   }
 
