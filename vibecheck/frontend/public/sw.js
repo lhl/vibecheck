@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'vibecheck-shell-v2'
+const SHELL_CACHE = 'vibecheck-shell-v3'
 const APP_SHELL = ['/']
 
 self.addEventListener('install', (event) => {
@@ -51,7 +51,9 @@ self.addEventListener('push', (event) => {
     data: {
       url: typeof payload.url === 'string' ? payload.url : '/',
       call_id: typeof payload.call_id === 'string' ? payload.call_id : null,
-      action: null,
+      default_action: Array.isArray(payload.actions) && payload.actions.length > 0
+        ? payload.actions[0].action || null
+        : null,
     },
     actions: Array.isArray(payload.actions) ? payload.actions : [],
   }
@@ -61,16 +63,36 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const action = event.action || ''
+  // event.action is the button ID ("approve"/"deny") when an action button is clicked,
+  // or empty string when the notification body is tapped. On some Android Chrome versions,
+  // event.action may be empty even for button clicks — fall back to the first action
+  // (approve) when there's a call_id, since the user tapped an approval notification.
+  let action = event.action || ''
   const url = event.notification?.data?.url || '/'
   const callId = event.notification?.data?.call_id || null
+  if (!action && callId) {
+    action = event.notification?.data?.default_action || ''
+  }
+  const source = 'sw_notificationclick'
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      // Match any app window on the same origin — don't require ?sid= in the URL,
+      // since the PWA may have been opened fresh without a session in the URL.
       for (const client of clients) {
-        if (client.url && client.url.includes(url)) {
-          client.postMessage({ type: 'notification_action', action, url, call_id: callId })
-          return client.focus()
+        try {
+          if (client.url && new URL(client.url).origin === self.location.origin) {
+            client.postMessage({
+              type: 'notification_action',
+              action,
+              url,
+              call_id: callId,
+              source,
+            })
+            return client.focus()
+          }
+        } catch {
+          // invalid URL, skip
         }
       }
 
@@ -81,6 +103,7 @@ self.addEventListener('notificationclick', (event) => {
       if (callId) {
         decorated += `${decorated.includes('?') ? '&' : '?'}call_id=${encodeURIComponent(callId)}`
       }
+      decorated += `${decorated.includes('?') ? '&' : '?'}notif_source=${encodeURIComponent(source)}`
       return self.clients.openWindow(decorated)
     }),
   )
