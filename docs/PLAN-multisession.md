@@ -431,6 +431,57 @@ curl -H "X-PSK: $VIBECHECK_PSK" http://localhost:7870/api/sessions
 
 ---
 
+## Recommendation: Claude Opus 4.6
+
+> *Collected as part of multi-model feedback on this design doc. This section represents one model's independent analysis of the options and tradeoffs.*
+
+**Recommendation: Phase 1 (in-process managed sessions) first. Build Phase 2 only when you hit a concrete wall.**
+
+### The gap is smaller than it looks
+
+The codebase already has the multi-session primitives: `_ensure_agent_loop()` lazily creates an `AgentLoop` for any managed bridge, `SessionManager.start_session()` wires it up, `ConnectionManager` does room-based WebSocket routing, and every REST endpoint is already scoped to `/api/sessions/{session_id}`. The frontend session picker lists and switches between sessions. The literal missing piece is a POST endpoint and a button. This is an afternoon, not a project.
+
+### Phase 2 solves a problem you probably won't hit soon
+
+The hub+worker architecture (Option 5B) is ~800 lines of new protocol code: worker registration, event forwarding, a bidirectional control channel, heartbeats, disconnect semantics. It buys two things: crash isolation and TUI-per-session. Neither is urgent:
+
+- **Crash isolation** — `AgentLoop.act()` is async I/O-bound (waiting on LLM API calls). Tool execution runs in subprocesses that Vibe manages. The Python host process itself almost never crashes. At 5-10 concurrent sessions, this is a theoretical risk, not a practical one. You'll hit memory limits before you hit crash risk.
+
+- **TUI per spawned session** — genuinely useful, but requires Phase 2 (worker process) + Phase 3 (tmux spawn + attach workflow). That's two phases of infrastructure before the TUI-attach payoff lands. Meanwhile, the PWA already provides the full control surface: messages, approvals, input, auto-approve, event stream. The TUI is a debugging convenience, not a control necessity.
+
+### The real workflow question
+
+The original ask was "run multiple `uv run vibecheck-vibe` sessions." But once you can spawn sessions from the phone, ask: how often do you actually need a second CLI-started session? The typical workflow becomes: one `vibecheck-vibe` for terminal debugging + N headless sessions from the PWA for parallel work. That's exactly what Phase 1 provides.
+
+The case where Phase 1 falls short: multiple operators who each want their own terminal, or sessions that need truly isolated working directories (different repos, different `cwd`). If that's the day-one requirement, go straight to Phase 2. But if the primary consumer is the PWA, Phase 1 covers it.
+
+### Forward compatibility is the key design insight
+
+`POST /api/sessions` is the same endpoint in Phase 1 and Phase 2. In Phase 1 it creates an in-process managed `AgentLoop`. In Phase 2 it gains an optional `"spawn": "worker"` parameter that forks a subprocess instead. The PWA never changes. The REST and WebSocket contract is identical whether the session is in-process or remote — the `SessionManager.list()` merges both sources transparently.
+
+This means Phase 1 isn't throwaway work or tech debt — it's the foundation that Phase 2 extends. The API surface, the frontend UX, and the test coverage all carry forward.
+
+### What I'd build, concretely
+
+1. `POST /api/sessions` — ~20 lines, creates managed in-process session
+2. `DELETE /api/sessions/{session_id}` — ~15 lines, tears down managed sessions (guards against deleting live CLI sessions)
+3. "New Session" button in `SessionPicker.svelte` + "Delete" affordance on managed sessions — ~50 lines frontend
+4. Test coverage for the create → message → approve → delete lifecycle
+5. Ship it, use it, and let real usage tell you whether Phase 2 is needed
+
+### When to escalate to Phase 2
+
+Build the hub+worker split when any of these become true:
+- A managed session crash actually takes down the server (not hypothetical — it happened)
+- You need >10 concurrent sessions and memory pressure is real
+- Multiple operators need independent terminals for their sessions
+- You need per-session working directory isolation for different repositories
+- You want to distribute sessions across multiple machines
+
+Until then, the in-process approach is simpler to operate, simpler to debug, and simpler to reason about. The best architecture is the one with the fewest moving parts that still meets the requirements.
+
+---
+
 ## Phase 2: Hub + Remote Workers (Option 5B)
 
 ### When to build this
