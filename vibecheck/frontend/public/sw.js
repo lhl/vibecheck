@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'vibecheck-shell-v1'
+const SHELL_CACHE = 'vibecheck-shell-v2'
 const APP_SHELL = ['/']
 
 self.addEventListener('install', (event) => {
@@ -11,7 +11,11 @@ self.addEventListener('install', (event) => {
 })
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim())
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== SHELL_CACHE).map((k) => caches.delete(k)))
+    ).then(() => self.clients.claim())
+  )
 })
 
 self.addEventListener('fetch', (event) => {
@@ -20,7 +24,11 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    fetch(event.request).catch(async () => {
+    fetch(event.request).then((response) => {
+      const clone = response.clone()
+      caches.open(SHELL_CACHE).then((cache) => cache.put('/', clone))
+      return response
+    }).catch(async () => {
       const cache = await caches.open(SHELL_CACHE)
       return cache.match('/') || Response.error()
     }),
