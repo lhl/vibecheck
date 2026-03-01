@@ -140,7 +140,7 @@
     display: grid;
     grid-template-columns: auto 1fr auto;
     gap: 0.35rem;
-    align-items: end;
+    align-items: start;
   }
 
   textarea {
