@@ -173,10 +173,8 @@
 
   .yolo-box {
     margin-top: 0.65rem;
-    border: 1px solid #1a1a1a;
-    background: #f7d046;
-    color: #111;
-    padding: 0.65rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid var(--card-border);
     display: grid;
     gap: 0.45rem;
   }
@@ -186,22 +184,22 @@
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    font-weight: 900;
+    color: var(--label);
   }
 
   .yolo-copy {
     margin: 0;
     font-size: 0.78rem;
-    color: #111;
+    color: var(--meta);
   }
 
   .yolo-toggle {
-    border-color: #111;
-    background: #111;
-    color: #f7d046;
+    border-color: #d7b22e;
+    background: #f7d046;
+    color: #111;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    font-weight: 900;
+    font-weight: 800;
   }
 
 </style>

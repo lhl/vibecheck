@@ -23,6 +23,20 @@
   - `cd vibecheck/frontend && npm test` -> pass (`22 files, 98 tests`),
   - `cd vibecheck/frontend && npm run build` -> pass.
 
+### YOLO UI follow-up: left label + cost line retained, toned-down settings
+
+- Updated bottom status line behavior while YOLO is enabled:
+  - keeps full-width yellow bar,
+  - moves plain black `YOLO` label to the left side,
+  - preserves right-side cost/token line and settings caret.
+- Updated settings presentation to be less tempting:
+  - removed all-yellow warning-box treatment from the YOLO section container,
+  - kept normal header/description styling,
+  - changed YOLO toggle button to yellow background with black label text.
+- Verification:
+  - `cd vibecheck/frontend && npm test -- src/components/StatusLine.test.js src/components/SettingsPanel.test.js src/App.yolo.test.js` -> pass.
+  - `cd vibecheck/frontend && npm run build` -> pass.
+
 ### Scope decision: defer cancellation feature to future work
 
 - Deferred implementation of Send/Cancel toggle and `POST /api/sessions/{session_id}/cancel` from current hackathon scope.

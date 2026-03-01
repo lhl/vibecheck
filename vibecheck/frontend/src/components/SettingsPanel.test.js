@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import SettingsPanel from './SettingsPanel.svelte'
 
 describe('SettingsPanel', () => {
-  it('shows YOLO toggle copy with inverted warning box styling', () => {
+  it('shows YOLO toggle copy and button', () => {
     render(SettingsPanel, {
       props: {
         yoloEnabled: false,

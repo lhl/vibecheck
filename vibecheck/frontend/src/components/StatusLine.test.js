@@ -73,5 +73,6 @@ describe('StatusLine', () => {
     const line = screen.getByTestId('status-line')
     expect(line).toHaveClass('yolo-active')
     expect(screen.getByText('YOLO')).toBeInTheDocument()
+    expect(screen.getByText('--')).toBeInTheDocument()
   })
 })

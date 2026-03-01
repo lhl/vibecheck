@@ -26,21 +26,21 @@
   on:keydown={(e) => e.key === 'Enter' && onSettingsToggle?.()}
   data-testid="status-line"
 >
-  {#if yoloEnabled}
-    <span class="yolo-marker">YOLO</span>
-  {:else}
-    <div class="left">
+  <div class="left">
+    {#if yoloEnabled}
+      <span class="yolo-label">YOLO</span>
+    {:else}
       <span class="dot" style="background: {dotColor}" aria-hidden="true"></span>
       <span class="state-label">{stateLabel}</span>
       {#if sessionError}
         <span class="error-hint" title={sessionError}>!</span>
       {/if}
-    </div>
-    <div class="right">
-      <span class="cost">{costDisplay}</span>
-      <span class="caret">{settingsOpen ? '▼' : '▲'}</span>
-    </div>
-  {/if}
+    {/if}
+  </div>
+  <div class="right">
+    <span class="cost">{costDisplay}</span>
+    <span class="caret">{settingsOpen ? '▼' : '▲'}</span>
+  </div>
 </div>
 
 <style>
@@ -58,9 +58,13 @@
   }
 
   .status-line.yolo-active {
-    justify-content: center;
     background: #f7d046;
     border-top-color: #111;
+  }
+
+  .status-line.yolo-active .cost,
+  .status-line.yolo-active .caret {
+    color: #111;
   }
 
   .left, .right {
@@ -95,14 +99,10 @@
     font-size: 0.6rem;
   }
 
-  .yolo-marker {
-    background: #111;
-    color: #f7d046;
+  .yolo-label {
+    color: #111;
     font-weight: 900;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
-    padding: 0.1rem 0.7rem;
-    border: 1px solid #111;
-    line-height: 1.1;
+    letter-spacing: 0.1em;
   }
 </style>
