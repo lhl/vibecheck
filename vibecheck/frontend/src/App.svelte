@@ -63,7 +63,7 @@
   let sessionsLoading = false
   let resumeBusy = ''
   let theme = loadThemePreference()
-  let sessionPickerOpen = false
+  let sessionPickerOpen = true
   let settingsOpen = false
 
   const EVENT_CACHE_PREFIX = 'vibecheck_events_'
