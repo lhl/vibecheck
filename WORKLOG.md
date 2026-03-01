@@ -988,3 +988,14 @@
 - Verification:
   - `cd vibecheck/frontend && npm test -- --run src/App.test.js src/components/ChatMessage.test.js` -> pass.
   - `cd vibecheck/frontend && npm run build` -> pass.
+
+### Multi-session architecture planning (single URL + session orchestration)
+- Added `docs/PLAN-multisession.md` to capture a dedicated plan for serving all sessions from `https://vibecheck.shisa.ai`.
+- Documented current constraints (one live in-process session per `vibecheck-vibe` process) and target requirements (global session list, routed WS/events/actions, worker health, private internal networking).
+- Wrote an open alternatives set:
+  - Option A: Hub + worker mesh (recommended target),
+  - Option B: Caddy fan-out to independent servers (fastest short-term),
+  - Option C: broker-backed hub/worker,
+  - Option D: single supervisor process,
+  - Option E: tmux/PTY fallback.
+- Added a phased rollout (M0–M4), including future `POST /api/sessions` and `DELETE /api/sessions/{id}` for spawn/teardown while preserving operator TUI access (SSH/tmux path) plus PWA control.

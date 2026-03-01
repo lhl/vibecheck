@@ -1,252 +1,472 @@
-# Multi-Session Plan for `vibecheck.shisa.ai`
+# Multi-Session Plan (vibecheck.shisa.ai as a Hub)
 
-> **Status:** Draft (open alternatives)  
-> **Last updated:** 2026-03-01  
-> **Goal:** From one public URL (`https://vibecheck.shisa.ai`), list and control all active Vibe sessions, and later spawn/tear down sessions with both TUI and PWA access.
+> **Status:** Proposed (design doc)
+> **Last updated:** 2026-03-01
+>
+> **Goal:** Open `https://vibecheck.shisa.ai/` and see + connect to **all** running Vibe sessions we spin up (including multiple concurrent `uv run vibecheck-vibe` terminal sessions).
 
----
+This document synthesizes the architecture options for multi-session when **each live session requires in-process access to its own `AgentLoop`** (live approvals/input), but we still want **one** public origin and **one** WebSocket API surface for the PWA.
 
-## 1) Problem Statement
-
-Today, each `uv run vibecheck-vibe` process owns:
-- one in-process live `AgentLoop`,
-- one in-process `SessionManager`,
-- one WebSocket server (default `:7870`).
-
-That gives great same-process control for one live session, but no single shared control plane across multiple `vibecheck-vibe` processes.
+Related docs:
+- `docs/PLAN.md` (current roadmap and single-process multi-session design)
+- `docs/ANALYSIS-session-attachment.md` (why cross-process live attach is impossible without IPC)
 
 ---
 
-## 2) Requirements
+## Terminology
 
-## Functional
-- One public entrypoint (`vibecheck.shisa.ai`) for all sessions.
-- Show all controllable sessions (live + resumed/managed).
-- Connect PWA to any session’s real-time event stream.
-- Route `approve`, `input`, and `message` actions to the correct session/process.
-- Support both:
-  - manually started sessions,
-  - system-spawned sessions (future).
-- Future: create/stop sessions from PWA while preserving optional terminal TUI access.
-
-## Non-Functional
-- Keep current mobile API stable where possible (`/api/sessions`, `/ws/events/{id}`).
-- Avoid exposing worker ports publicly.
-- Recover from worker restarts (heartbeat + stale session cleanup).
-- Keep security split between public client auth and internal worker auth.
+- **Hub:** the one public FastAPI server behind Caddy (the only origin the PWA talks to).
+- **Worker:** a per-session process that owns a live `AgentLoop` (usually started via `uv run vibecheck-vibe`).
+- **Session:** a Vibe conversation identified by `session_id` (and optionally namespaced by worker).
 
 ---
 
-## 3) Option Set
+## Problem Statement
 
-## Option A — **Hub + Worker Mesh (Recommended target)**
+Today, `uv run vibecheck-vibe` starts:
+- A Textual TUI (Vibe UI)
+- A FastAPI/uvicorn server (REST + WebSocket) on a TCP port (default `7870`)
+- A `SessionBridge` live-attached to the in-process `AgentLoop`
 
-Run a central **Hub** at `vibecheck.shisa.ai` and N **Worker** processes (each worker is a `vibecheck-vibe` session host).
-
-- Hub responsibilities:
-  - global session registry (`global_session_id -> worker + local_session_id`),
-  - fan-out WebSocket events to clients,
-  - route action APIs to owning worker,
-  - optional spawn/stop orchestration.
-- Worker responsibilities:
-  - own live `AgentLoop` + TUI + local bridge callbacks,
-  - stream events to hub,
-  - execute routed actions for local sessions.
-
-**Pros**
-- Preserves same-process callback correctness per session.
-- Scales to many sessions and potentially many hosts.
-- Clean path to spawn/teardown and policy controls.
-
-**Cons**
-- Highest implementation effort.
-- Requires internal protocol + lifecycle management.
+Running *multiple* `vibecheck-vibe` processes currently means:
+- You must use different ports (`--ws-port`) to avoid binding conflicts.
+- The PWA is *not* a multi-origin client. It assumes the same origin for:
+  - `GET /api/sessions`
+  - `WS /ws/events/{session_id}`
+- Therefore, sessions hosted on different ports are not visible at one `vibecheck.shisa.ai` endpoint.
 
 ---
 
-## Option B — **Caddy Fan-Out to Many Independent Servers**
+## Constraints (Non-Negotiable)
 
-Run multiple independent `vibecheck-vibe` instances on different ports/subdomains and route traffic with Caddy.
+1. **Live attach requires same process**
+   - Tool approvals and user-input callbacks are in-process `asyncio.Future` resolution.
+   - A separate process cannot resolve another process’s pending Futures without a purpose-built IPC/control channel.
 
-Example:
-- `vibecheck.shisa.ai/s/session-a/* -> :7871`
-- `vibecheck.shisa.ai/s/session-b/* -> :7872`
+2. **One TCP port ⇢ one server process**
+   - Only one process can bind `:7870`.
+   - If we want `vibecheck.shisa.ai` to represent the whole fleet, we need a single “front door” service on the public port.
 
-**Pros**
-- Fastest to stand up.
-- Minimal backend refactor.
-
-**Cons**
-- No real global session list without extra aggregator.
-- PWA must understand per-session base paths or route prefixes.
-- Harder to add robust spawn/stop + worker health.
+3. **Multiple Textual TUIs implies multiple OS processes**
+   - Each session with a terminal UI needs a real TTY (or a PTY via tmux/script/etc.).
+   - We should assume “one live TUI session per worker process.”
 
 ---
 
-## Option C — **Message Broker Backbone (Hub + Redis/NATS)**
+## Target UX / Requirements
 
-Like Option A, but workers publish events to a broker and hub consumes.
+Must-have:
+- From `vibecheck.shisa.ai`:
+  - list all active sessions (“fleet”)
+  - connect to a chosen session and see live events
+  - send a message, approve/deny tool calls, answer questions
+- Sessions started in terminals (`vibecheck-vibe`) should appear automatically.
 
-**Pros**
-- Better decoupling, replay, and durability options.
-- Easier multi-host scale.
+Nice-to-have:
+- Start (spawn) new sessions from the PWA.
+- Stop (tear down) sessions from the PWA.
+- Optional: TUI access for PWA-spawned sessions (likely via tmux + SSH, or a web terminal).
 
-**Cons**
-- Extra infra and operational complexity.
-- Overkill for short-term single-host deployment.
-
----
-
-## Option D — **Single Supervisor Process, Multi-Session In-Process**
-
-One supervisor process creates and owns multiple managed `AgentLoop`s directly.
-
-**Pros**
-- Simple control plane.
-- No inter-process routing.
-
-**Cons**
-- Hard to provide true per-session terminal TUI parity.
-- Large architectural shift away from current `vibecheck-vibe` model.
+Non-goals (for now):
+- Perfect load balancing across machines.
+- Multi-tenant auth (PSK remains the security boundary).
 
 ---
 
-## Option E — **tmux/PTY Bridging Fallback**
+## Options
 
-Treat sessions as terminal processes and bridge via PTY/tmux.
+### Option 0: Status Quo (One `vibecheck-vibe` per host)
 
-**Pros**
-- Works with almost any CLI session model.
+How it works:
+- Run exactly one `vibecheck-vibe` on `:7870`.
 
-**Cons**
-- Loses typed event/callback advantages.
-- More brittle and lower-fidelity approvals/input handling.
+Pros:
+- No new code.
+- Matches current demo path.
 
----
-
-## 4) Decision Matrix (Initial)
-
-| Option | Time to First Value | Long-Term Fit | TUI + PWA Parity | Operational Complexity |
-|---|---:|---:|---:|---:|
-| A: Hub + Workers | Medium | High | High | Medium |
-| B: Caddy Fan-Out | High | Low-Medium | Medium | Low |
-| C: Broker Backbone | Low-Medium | High | High | High |
-| D: Single Supervisor | Medium | Medium | Low-Medium | Medium |
-| E: PTY Fallback | Medium | Low | Low | Medium |
-
-**Working recommendation:**  
-- **Short term:** Option B if we need immediate multi-instance access with minimal code.  
-- **Target architecture:** Option A for a correct, scalable control plane and spawn/stop support.
+Cons:
+- Does not satisfy “run as many sessions as we want.”
 
 ---
 
-## 5) Recommended Target Architecture (Option A)
+### Option 1: Multiple Ports + User Chooses Port (No Hub)
 
-## Public Surface (unchanged for PWA)
-- `GET /api/sessions`
-- `GET /api/sessions/{id}`
-- `POST /api/sessions/{id}/approve`
-- `POST /api/sessions/{id}/input`
-- `POST /api/sessions/{id}/message`
-- `WS /ws/events/{id}`
+How it works:
+- Run N `vibecheck-vibe` processes on `:7871`, `:7872`, ...
+- Operator manually navigates to different origins/ports.
 
-Hub resolves `{id}` to owning worker and forwards action/event traffic.
+Pros:
+- Very low engineering cost.
 
-## Internal Worker Protocol (new)
-- Worker registration:
-  - `POST /internal/workers/register`
-  - payload: worker identity, capabilities, currently hosted sessions.
-- Heartbeats:
-  - `POST /internal/workers/{worker_id}/heartbeat`
-- Event ingress:
-  - worker->hub stream (WS or HTTP batched events).
-- Action routing:
-  - hub->worker private endpoint(s) for approve/input/message.
-
-## Session Identity
-- Keep current Vibe `session_id`, but store composite key internally:
-  - `global_session_key = {worker_id}:{session_id}`
-- Public API can continue exposing plain `session_id` if guaranteed unique, otherwise move to opaque `id` and keep raw IDs in metadata.
-
-## Security
-- Public auth: existing PSK (`VIBECHECK_PSK`).
-- Worker auth: separate internal token/mTLS (do not reuse public PSK).
-- Network: workers on private network only; no public worker ports.
+Cons:
+- Fails the primary goal: one `vibecheck.shisa.ai` surface aggregating all sessions.
+- Push notifications and “session picker” become fragmented per origin.
 
 ---
 
-## 6) Spawn / Teardown with TUI + PWA (Future)
+### Option 2: Reverse Proxy Trickery (Path/Subdomain per Session)
 
-## Spawn
-- Add `POST /api/sessions` on hub.
-- Hub asks local supervisor to start a worker/session.
-- Recommended runtime for TUI access: start in `tmux` with deterministic session name.
-- Return:
-  - session id,
-  - attach metadata (`ssh ...; tmux attach -t <name>`),
-  - PWA connectability status.
+How it works:
+- Run multiple backends on different ports.
+- Configure Caddy/Nginx to route:
+  - `/ws/events/{session_id}` to the right backend
+  - `/api/sessions/...` to the right backend
 
-## Teardown
-- Add `DELETE /api/sessions/{id}` on hub.
-- Route to worker/supervisor for graceful stop:
-  - SIGTERM,
-  - timeout,
-  - SIGKILL fallback.
+Pros:
+- Keep workers unchanged.
 
-## TUI Access Model
-- **Operator TUI:** SSH + tmux attach to spawned session.
-- **PWA control:** unchanged via hub API/WS.
-- Future optional enhancement: browser terminal bridge for TUI view/control.
+Cons:
+- Needs a dynamic routing table keyed by `session_id`.
+- Caddy config is static by default; dynamic per-session routing is non-trivial.
+- Still needs an aggregator for `/api/sessions` (each backend only knows itself).
+
+Verdict:
+- Not recommended as the primary plan. It punts the hard part (dynamic registry) to the proxy layer.
 
 ---
 
-## 7) Incremental Rollout Plan
+### Option 3: Hub + Worker Servers (Hub Proxies to Workers)
 
-## Milestone M0 — Immediate Multi-Instance Access (fast path)
-- Run multiple `vibecheck-vibe` instances on different ports.
-- Configure Caddy routing strategy (subdomain or path prefix).
-- Manual session mapping doc + operational runbook.
+How it works:
+- Run a **hub** server on `:7870` (public, behind Caddy).
+- Run N **workers** (each `vibecheck-vibe`) on internal ports (`127.0.0.1:7871+`).
+- Each worker registers itself with the hub:
+  - `session_id`
+  - worker base URL (control plane)
+  - capabilities (live controllable, has TUI, etc.)
+- The hub:
+  - serves PWA
+  - exposes `/api/sessions` aggregated across workers
+  - terminates client WebSockets at `/ws/events/{session_id}`
+  - proxies streaming events from the correct worker to the client
+  - proxies REST actions (`approve`, `input`, `message`, `auto-approve`) to the worker
 
-## Milestone M1 — Hub Read Aggregation
-- Introduce central hub service with worker registry + health.
-- Aggregate session list across workers (`GET /api/sessions` unified).
-- Keep control actions temporarily direct or partially routed.
+Pros:
+- Minimal conceptual change to existing worker: it can keep its REST + WS stack.
+- Hub is a “single origin” for the PWA, satisfying the main requirement.
 
-## Milestone M2 — Full Routed Control
-- Route approve/input/message via hub.
-- Route WS events via hub with per-session fan-out.
-- Add stale worker/session eviction and reconnect handling.
+Cons:
+- Hub must implement a reliable WS proxy/bridge per active session.
+- Two sources of truth for session state/backlog (worker vs hub) unless the hub stays stateless.
+- Requires internal networking (hub must reach worker ports).
 
-## Milestone M3 — Orchestration
-- Implement `POST /api/sessions` and `DELETE /api/sessions/{id}`.
-- Add supervisor integration + tmux-backed TUI spawn.
-- Add quota/policy limits (max sessions, per-user caps).
-
-## Milestone M4 — Hardening
-- Worker auth hardening (token rotation / mTLS).
-- Audit logging for routed actions.
-- Load/perf testing, failure-mode tests, and rollout guardrails.
-
----
-
-## 8) Open Questions
-
-- Should public session IDs remain raw Vibe IDs or become hub-issued opaque IDs?
-- Single-host only first, or design for multi-host workers immediately?
-- Should worker->hub event transport be persistent WS or HTTP batch with retries?
-- Do we require browser-based TUI remoting, or is SSH/tmux sufficient for initial “TUI access”?
-- What policy should govern auto-spawned sessions (TTL, idle timeout, max concurrent)?
+Best fit:
+- Good stepping stone if we want a quick win with minimal worker refactors.
 
 ---
 
-## 9) Definition of Done (for this initiative)
+### Option 4: Hub is Authoritative; Workers Forward Events (Recommended)
 
-- From `https://vibecheck.shisa.ai`, a user can:
-  - see all active sessions,
-  - connect to any session stream,
-  - approve/input/message any session correctly.
-- System can optionally spawn and tear down sessions via API.
-- Spawned sessions are reachable from both:
-  - PWA control plane,
-  - operator terminal TUI path.
+How it works:
+- Run **one** public hub (`:7870`) that is the only server the PWA ever talks to.
+- Each live session runs in a **worker** process that owns the `AgentLoop`.
+- Workers do NOT need to expose a public WS endpoint for clients.
+- Instead:
+  - Worker forwards every `Event` to hub (push model).
+  - Hub stores per-session backlog and broadcasts to connected PWA clients at `/ws/events/{session_id}`.
+  - For control actions, hub forwards commands to the owning worker (HTTP) or via a dedicated control channel.
 
+Two sub-variants:
+- **4A: Worker -> Hub via HTTP POST**
+  - simplest implementation
+  - noisier (many requests) and easier to overload
+- **4B: Worker -> Hub via persistent WebSocket (preferred)**
+  - efficient, backpressure-friendly
+  - hub can detect disconnects quickly (marks session offline)
+
+Pros:
+- Hub becomes the single source of truth for:
+  - what the PWA sees
+  - backlog
+  - push notifications (hub sees events directly)
+- No WS proxying complexity (hub is the WS server; workers are event publishers).
+- Extends naturally to multi-host in the future (workers connect out to the hub).
+
+Cons:
+- Requires new “worker protocol” (registration + event stream + optional control channel).
+- Requires some refactor so `vibecheck-vibe` can run as a worker (and not as the public server).
+
+Verdict:
+- This is the cleanest long-term design for “many sessions, one vibecheck.shisa.ai.”
+
+---
+
+### Option 5: Full Worker Control Channel (No Worker Ports)
+
+How it works:
+- Workers connect to hub over a single outbound WebSocket:
+  - send events upstream
+  - receive control commands downstream (inject message, resolve approval, etc.)
+- Workers do not need to bind any TCP ports.
+
+Pros:
+- Simplifies networking and firewalling.
+- Best for distributed workers (multiple machines).
+
+Cons:
+- More protocol work up front (command routing, acks, retries, idempotency).
+
+Verdict:
+- Good “v2” of Option 4B once the hub/worker split is proven.
+
+---
+
+### Option 6: tmux/PTY Sidecar (Terminal Scraping Fallback)
+
+How it works:
+- Run normal `vibe` sessions in tmux panes.
+- Sidecar scrapes terminal output + injects keystrokes for approvals.
+
+Pros:
+- Works even if Vibe internals change, as long as the UI is scriptable.
+
+Cons:
+- Not typed events, fragile parsing, hard to keep state correct.
+- Worst UX and highest maintenance.
+
+Verdict:
+- Fallback only (already documented elsewhere).
+
+---
+
+### Option 7: Upstream ACP / Native IPC (Wait for Vibe Support)
+
+How it works:
+- Use (or contribute) an upstream control protocol that supports attaching to an already-running session.
+
+Pros:
+- Most robust long-term if upstream commits to stable APIs.
+
+Cons:
+- Out of our direct control and schedule.
+- Not available in Vibe today for “attach to an existing running AgentLoop.”
+
+Verdict:
+- Keep an eye on it, but plan as if it won’t land in time.
+
+---
+
+## Recommended Direction
+
+Primary target:
+- **Option 4B: Hub authoritative, workers forward events over a persistent connection**
+
+Fastest incremental path:
+1. Implement Option 3 (hub + worker registration + hub-forwarded REST) OR a minimal Option 4A (HTTP POST forwarding) to prove the end-to-end UX.
+2. Upgrade to Option 4B (persistent worker-to-hub WS) for performance and reliability.
+3. Add Option 5-style downstream control over the same channel (remove worker ports).
+
+---
+
+## Proposed Architecture (Option 4B)
+
+### High-level diagram
+
+```
+Phone PWA ──HTTPS/WSS──> Caddy ──> Hub (FastAPI, :7870)
+                                   ├─ /api/sessions  (aggregated)
+                                   ├─ /ws/events/{sid} (broadcast)
+                                   └─ (push notifications, optional)
+
+Terminal A: uv run vibecheck-vibe ──(WS/HTTP out)──> Hub
+Terminal B: uv run vibecheck-vibe ──(WS/HTTP out)──> Hub
+Terminal C: uv run vibecheck-vibe ──(WS/HTTP out)──> Hub
+```
+
+### Key idea
+
+- The hub owns the **client-facing** WebSocket rooms.
+- Workers own the **live** `AgentLoop` and produce events.
+- Hub routes control actions to the owning worker.
+
+---
+
+## Session Identity and Routing
+
+### Session IDs
+
+Vibe’s `session_id` is the natural key today. Risks:
+- Collision across workers is very unlikely, but possible.
+
+If we want explicit uniqueness, define:
+- `public_session_id = "{worker_id}:{vibe_session_id}"`
+
+This would require:
+- PWA uses `public_session_id` everywhere.
+- Hub maps `public_session_id -> worker_id -> vibe_session_id`.
+
+This is a product/API choice. If we keep raw Vibe session IDs, we accept collision risk.
+
+---
+
+## Hub Responsibilities
+
+Minimum:
+- Maintain an in-memory registry of sessions:
+  - `session_id`, `worker_id`, `connected`, `last_seen`, `title`, `started_at`, `state`, `controllable`, `auto_approve`
+- Provide existing public API contract:
+  - `GET /api/sessions`
+  - `GET /api/sessions/{sid}`
+  - `GET /api/sessions/{sid}/state`
+  - `POST /api/sessions/{sid}/message`
+  - `POST /api/sessions/{sid}/approve`
+  - `POST /api/sessions/{sid}/input`
+  - `POST /api/sessions/{sid}/auto-approve`
+  - `WS /ws/events/{sid}`
+
+Nice-to-have:
+- Persist registry/backlog (so hub restart doesn’t blank the fleet).
+
+---
+
+## Frontend Compatibility
+
+If the hub preserves the existing public contract:
+- REST: `/api/sessions`, `/api/sessions/{sid}/...`
+- WS: `/ws/events/{sid}`
+
+Then the Svelte PWA can remain “single-origin” and unchanged. Session aggregation becomes a backend concern only.
+
+If we introduce `public_session_id` (namespaced IDs), the PWA needs small changes to treat that as the primary `sid` everywhere (URL params, caches, WS path, REST paths).
+
+---
+
+## Worker Responsibilities
+
+Minimum:
+- Create the live `AgentLoop` + `SessionBridge` (same as today).
+- Register with hub after determining `session_id`.
+- Forward events to hub.
+- Accept control actions from hub (either via HTTP endpoints or control channel).
+
+TUI requirements:
+- A worker started by a human in SSH already has a TTY.
+- A worker spawned by the hub needs a PTY strategy (see Spawn/Tear-down section).
+
+---
+
+## Worker Registration and Event Transport (Proposed)
+
+This is intentionally “plan-level” and not final API design.
+
+### Registration
+
+Worker -> Hub:
+- register: `POST /api/workers/register`
+  - `worker_id` (uuid)
+  - `session_id`
+  - `capabilities`: `{ live: true, tui: true, controllable: true }`
+  - `metadata`: `{ title, started_at }`
+
+### Event stream
+
+Worker -> Hub:
+- persistent websocket: `WS /ws/workers/{worker_id}`
+  - worker sends JSON `Event` payloads (same schema as PWA expects)
+  - hub acks and updates session state/backlog
+
+### Control actions
+
+Hub -> Worker:
+- Phase 1: hub calls worker’s private HTTP server endpoints (proxy existing REST).
+- Phase 2: hub sends commands on the worker control channel:
+  - `inject_message`
+  - `resolve_approval`
+  - `resolve_input`
+  - `set_auto_approve`
+
+---
+
+## Spawn / Tear-Down (Future)
+
+### Spawn goals
+
+From PWA:
+- “New session” button
+- choose agent/profile/toolset
+- optional initial prompt
+- decide whether it needs a TUI
+
+### Spawn implementation options
+
+Option A: Headless managed sessions (no TUI)
+- Hub spawns/owns an `AgentLoop` in-process (today’s “managed” mode).
+- Lowest friction, no PTY requirements.
+- Does not satisfy “TUI access” but satisfies “more sessions.”
+
+Option B: Spawn workers without UI (still separate processes)
+- Hub spawns `vibecheck-worker` processes that run an AgentLoop without Textual.
+- Keeps isolation benefits while avoiding PTY complexity.
+
+Option C: Spawn TUI workers in tmux
+- Hub runs: `tmux new-session -d -s vibecheck-{id} uv run vibecheck-vibe --worker ...`
+- Operator can SSH and attach to tmux session for TUI.
+- Optional add-on: web terminal (ttyd/wetty) if we want TUI access via browser.
+
+### Tear-down
+
+For managed sessions:
+- Hub can cancel tasks / detach bridges.
+
+For worker sessions:
+- Hub can send a “shutdown” command to worker.
+- Or hub can send SIGTERM to a tracked PID (local-only).
+
+---
+
+## Phased Implementation Plan (Concrete)
+
+Phase 0: Document + align (this doc)
+- Decide whether to keep raw `session_id` or introduce `public_session_id`.
+
+Phase 1: Multi-session visible at one origin (quick win)
+- Add a hub server mode that can aggregate sessions.
+- Add worker registration.
+- Choose one transport:
+  - Option 3 (hub proxies) if we want minimal worker changes, or
+  - Option 4A (worker HTTP POST forward) if we want hub-authoritative quickly.
+- Verify:
+  - start two `vibecheck-vibe` workers in two SSH terminals
+  - both appear in `GET /api/sessions` on the hub
+  - PWA can switch between them and control each
+
+Phase 2: Reliable event transport (upgrade)
+- Replace HTTP forward with persistent worker WS (Option 4B).
+- Add heartbeats and disconnect semantics.
+- Hub becomes authoritative for backlog/state.
+
+Phase 3: Spawn/tear-down (headless first)
+- Add hub endpoint to create “managed” sessions (no TUI).
+- Add tear-down support.
+
+Phase 4: Spawn/tear-down with TUI (optional)
+- Implement tmux-spawned workers.
+- Provide operator workflow for TUI access (SSH attach) or web terminal integration.
+
+---
+
+## CLI / Deployment Shape (Proposed)
+
+This is a packaging detail, but it affects how we roll it out safely.
+
+Suggested commands/modes:
+- `uv run vibecheck-hub` (new): run hub on `:7870` and serve the PWA.
+- `uv run vibecheck-vibe` (existing): default behavior stays “standalone” for dev.
+- `uv run vibecheck-vibe --hub http://127.0.0.1:7870` (new flag): run as a worker.
+  - registers to hub
+  - forwards events to hub
+  - accepts commands from hub (HTTP or control channel)
+  - binds worker ports only on localhost (or not at all if Option 5)
+
+On `vibecheck.shisa.ai`:
+- Caddy continues to reverse-proxy `:7870` only.
+- Workers are not public; they are internal processes on the host (at least initially).
+
+---
+
+## Open Questions
+
+1. Do we need to support connecting to multiple sessions simultaneously from one PWA client, or is “one active session at a time” sufficient?
+2. Do we accept Vibe `session_id` collision risk, or should we introduce `public_session_id` now?
+3. Is “TUI access from PWA” required, or is “TUI exists via SSH/tmux” acceptable for spawned sessions?
+4. Do we want hub registry/backlog persistence (sqlite) or is in-memory acceptable for hackathon/demo?
