@@ -482,6 +482,67 @@ Until then, the in-process approach is simpler to operate, simpler to debug, and
 
 ---
 
+## Recommendation: GPT-5.3-Codex (xhigh)
+
+> *Collected as part of multi-model feedback on this design doc. This section represents one model's independent analysis of the options and tradeoffs.*
+
+**Recommendation: choose the hybrid explicitly as policy, not just as a possibility:**
+- **Ship Option 1 now** (single-origin, in-process multi-session spawn/teardown).
+- **Design Option 5B seams now** (session ownership metadata + worker registration contract stubs).
+- **Move to Option 5B when objective trigger conditions are met.**
+
+### Why this is the best fit for your current requirements
+
+Your immediate product requirement is clear: one URL (`vibecheck.shisa.ai`) where users can see and control all sessions. Option 1 already satisfies that with the smallest delta and no topology change:
+- keeps existing REST + WS contract,
+- keeps existing frontend assumptions,
+- adds only create/delete lifecycle endpoints and UI affordances.
+
+That means you get user-visible value quickly while avoiding protocol and ops complexity that users do not yet experience.
+
+### Why not jump directly to full hub/worker now
+
+Going straight to Option 5B/6 is technically clean but front-loads hard distributed-systems work:
+- worker lifecycle + registration,
+- control channel reliability (acks/idempotency/retry semantics),
+- heartbeat/offline handling,
+- two-plane auth model and internal networking policy.
+
+Those are worthwhile investments, but they are not the shortest path to proving the multi-session UX at one URL.
+
+### Where I differ slightly from a pure “stay in-process” view
+
+I would avoid treating Option 1 as an end state. Implement it as **Phase-1 architecture with migration hooks**:
+- add `session_origin` (`in_process` vs `worker`) in session payloads,
+- add optional `owner_id`/`worker_id` fields now (nullable for in-process),
+- keep `/api/sessions` and `/ws/events/{id}` as the permanent public contract.
+
+This keeps frontend and API stable when worker routing is introduced later.
+
+### Recommended trigger gates for Phase 2 (Option 5B)
+
+Promote to hub+workers when any one of these happens in production-like usage:
+1. Need guaranteed per-session TUI access for PWA-spawned sessions.
+2. Need strict failure isolation between sessions.
+3. Need stronger working-directory/process isolation across repos.
+4. Need concurrency that stresses a single-process memory envelope.
+5. Need multi-host placement.
+
+### Implementation posture I recommend
+
+1. Build Option 1 now and ship quickly.
+2. Add basic operational guardrails immediately (session cap, idle timeout, clear “managed vs live” labels).
+3. Draft the worker protocol as an internal RFC while Option 1 is being used.
+4. Implement Option 5B only after one of the trigger gates is observed (not anticipated).
+
+### Bottom line
+
+If the decision is “what should we do next week,” pick **Option 1**.  
+If the decision is “what architecture should we converge to over time,” pick **Option 5B**.  
+The winning strategy is **Option 1 now, Option 5B by trigger**, with compatibility seams added from day one.
+
+---
+
 ## Phase 2: Hub + Remote Workers (Option 5B)
 
 ### When to build this
