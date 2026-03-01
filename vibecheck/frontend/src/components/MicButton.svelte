@@ -6,11 +6,18 @@
   export let language = 'ja'
   export let disabled = false
   export let onTranscribed = null
+  export let onRecordingChange = null
 
   let isUploading = false
   let errorMessage = ''
   let startPromise = null
   let stopRequested = false
+
+  function notifyRecording(active) {
+    if (typeof onRecordingChange === 'function') {
+      onRecordingChange(active)
+    }
+  }
 
   async function begin() {
     if (disabled || isUploading || startPromise || isRecording()) {
@@ -27,6 +34,7 @@
       if (stopRequested) {
         return
       }
+      notifyRecording(true)
     } catch (error) {
       if (!stopRequested) {
         errorMessage = error instanceof Error ? error.message : 'Recording failed'
@@ -44,6 +52,7 @@
     stopRequested = true
     const pending = startPromise
     errorMessage = ''
+    notifyRecording(false)
 
     let blob = null
     try {
@@ -184,13 +193,13 @@
   .mic {
     display: grid;
     place-items: center;
-    width: 44px;
-    height: 42px;
+    width: 60px;
+    height: 60px;
     padding: 0;
     border-radius: 2px;
-    border: 1px solid rgba(255,255,255,0.12);
-    background: transparent;
-    color: var(--text-muted, #888);
+    border: 1px solid #9a4747;
+    background: rgba(255, 77, 77, 0.06);
+    color: #d88;
     user-select: none;
     touch-action: manipulation;
   }
@@ -201,17 +210,18 @@
 
   .mic[data-recording='true'] {
     border-color: #ff4d4d;
-    background: rgba(255, 77, 77, 0.1);
+    background: rgba(255, 77, 77, 0.18);
+    color: #ff4d4d;
   }
 
   .mic-icon {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
   }
 
   .rec-dot {
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     background: #ff4d4d;
     animation: pulse 0.9s infinite;

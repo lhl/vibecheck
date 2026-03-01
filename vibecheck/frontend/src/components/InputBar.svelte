@@ -13,6 +13,7 @@
   let isSubmitting = false
   let errorMessage = ''
   let textareaEl = null
+  let recording = false
 
   $: isConnected = connectionStatus === 'connected'
   $: isDisabled = !isConnected || !sessionId || isSubmitting
@@ -22,6 +23,10 @@
     if (!textareaEl) return
     textareaEl.style.height = 'auto'
     textareaEl.style.height = `${Math.min(textareaEl.scrollHeight, 150)}px`
+  }
+
+  function handleRecordingChange(active) {
+    recording = active
   }
 
   function handleTranscribed(text) {
@@ -106,12 +111,13 @@
   }
 </script>
 
-<div class="input-bar">
+<div class="input-bar" class:recording>
   <MicButton
     {psk}
     language={voiceLanguage}
     disabled={isDisabled}
     onTranscribed={handleTranscribed}
+    onRecordingChange={handleRecordingChange}
   />
   <textarea
     rows="1"
@@ -139,7 +145,7 @@
 
   textarea {
     resize: none;
-    min-height: 42px;
+    min-height: 60px;
     max-height: 150px;
     border-radius: 2px;
     border: 1px solid var(--input-border);
@@ -149,6 +155,12 @@
     line-height: 1.35;
     font: inherit;
     overflow-y: auto;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .input-bar.recording textarea {
+    border-color: #9a4747;
+    background: rgba(255, 77, 77, 0.06);
   }
 
   textarea:disabled {
@@ -156,13 +168,12 @@
   }
 
   button {
-    min-width: 56px;
-    height: 42px;
+    min-width: 60px;
+    height: 60px;
     border-radius: 2px;
     border: 1px solid var(--primary-border);
     background: var(--primary-bg);
     color: var(--primary-fg);
-    font-weight: 700;
     font: inherit;
     font-weight: 700;
     font-size: 0.82rem;
