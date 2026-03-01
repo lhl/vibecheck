@@ -65,6 +65,7 @@
   let talkerState = 'idle'
   let talkerAudio = null
   let talkerTtsAbort = null
+  let talkerSttAbort = null
   let talkerSubmitAssistantCount = 0
 
   const EVENT_CACHE_PREFIX = 'vibecheck_events_'
@@ -525,7 +526,7 @@
     storePsk(trimmed)
     psk = trimmed
     pskDraft = trimmed
-    pskSettingsDraft = ''
+    pskSettingsDraft = trimmed
     refreshSessions().then(() => {
       startRefreshTimer()
       if (sessionId && isConnectableSession(sessionId)) {
@@ -561,7 +562,7 @@
       return
     }
     if (trimmed === psk) {
-      pskSettingsDraft = ''
+      pskSettingsDraft = psk
       return
     }
 
@@ -569,7 +570,7 @@
     storePsk(trimmed)
     psk = trimmed
     pskDraft = trimmed
-    pskSettingsDraft = ''
+    pskSettingsDraft = trimmed
 
     refreshSessions().then(() => {
       startRefreshTimer()
@@ -649,6 +650,10 @@
       // Exiting talker mode
       talkerActive = false
       talkerState = 'idle'
+      if (talkerSttAbort) {
+        talkerSttAbort.abort()
+        talkerSttAbort = null
+      }
       if (talkerTtsAbort) {
         talkerTtsAbort.abort()
         talkerTtsAbort = null
@@ -686,6 +691,13 @@
     talkerState = 'transcribing'
     await pauseVAD()
 
+    // Abort any previous in-flight STT/submit pipeline
+    if (talkerSttAbort) {
+      talkerSttAbort.abort()
+    }
+    const abort = new AbortController()
+    talkerSttAbort = abort
+
     try {
       const response = await fetch(`/api/voice/transcribe?language=${encodeURIComponent(voiceLanguage)}`, {
         method: 'POST',
@@ -694,7 +706,10 @@
           'Content-Type': 'audio/wav',
         },
         body: wavBlob,
+        signal: abort.signal,
       })
+
+      if (!talkerActive) return  // exited during STT fetch
 
       if (!response.ok) {
         console.warn('[talker] STT failed:', response.status)
@@ -704,6 +719,8 @@
       }
 
       const payload = await response.json()
+      if (!talkerActive) return  // exited during json parse
+
       const text = typeof payload?.text === 'string' ? payload.text.trim() : ''
       if (!text) {
         talkerState = 'listening'
@@ -728,7 +745,10 @@
           ...(psk ? { 'X-PSK': psk } : {}),
         },
         body: JSON.stringify(body),
+        signal: abort.signal,
       })
+
+      if (!talkerActive) return  // exited during submit
 
       if (!submitResponse.ok) {
         console.warn('[talker] Submit failed:', submitResponse.status)
@@ -744,10 +764,15 @@
       // Stay in 'running' state — the reactive block below will detect
       // when the agent finishes and trigger TTS
     } catch (error) {
+      if (error?.name === 'AbortError') return  // intentional abort on toggle-off
       console.warn('[talker] Speech processing error:', error)
       if (talkerActive) {
         talkerState = 'listening'
         await resumeVAD()
+      }
+    } finally {
+      if (talkerSttAbort === abort) {
+        talkerSttAbort = null
       }
     }
   }
@@ -830,12 +855,22 @@
 
       if (!talkerActive) {  // exited before play
         URL.revokeObjectURL(url)
+        talkerAudio = null
         return
       }
 
       await audio.play()
     } catch (error) {
       if (error?.name === 'AbortError') return  // intentional abort on toggle-off
+      // Clean up URL + audio ref on any failure (e.g. autoplay policy rejection)
+      if (talkerAudio) {
+        const staleUrl = talkerAudio.src
+        talkerAudio.pause()
+        talkerAudio = null
+        if (staleUrl && staleUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(staleUrl)
+        }
+      }
       console.warn('[talker] TTS error:', error)
       if (talkerActive) {
         talkerState = 'listening'
@@ -893,7 +928,7 @@
 
   function toggleSettings() {
     if (!settingsOpen) {
-      pskSettingsDraft = ''
+      pskSettingsDraft = psk
     }
     settingsOpen = !settingsOpen
   }

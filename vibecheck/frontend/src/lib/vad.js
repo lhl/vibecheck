@@ -14,7 +14,7 @@ let onVADMisfireCallback = null
 /**
  * Convert a Float32Array of PCM samples (16 kHz mono) to a WAV blob.
  */
-function float32ToWavBlob(float32, sampleRate = 16000) {
+export function float32ToWavBlob(float32, sampleRate = 16000) {
   const numChannels = 1
   const bitsPerSample = 16
   const byteRate = sampleRate * numChannels * (bitsPerSample / 8)
