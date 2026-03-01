@@ -284,6 +284,8 @@ Multi-session *discovery and switching* is built into L1/L2. This layer adds act
 - [ ] Cross-agent context sharing (copy output from Agent A → input to Agent B)
 - [ ] Camera/gallery input: snap photo or upload → Mistral Large 3 (multimodal) analyzes → context for Vibe
   - **Prior art:** `frontend-prototype/` has working vision endpoint + camera/gallery UI + tests. Port to `vibecheck/routes/vision.py`.
+  - **Backend contract to port:** `POST /api/vision` multipart field `image`; allow `image/jpeg|image/png|image/webp`; default max upload `10MB` (`VISION_MAX_UPLOAD_BYTES`); fixed model/prompt contract (`mistral-large-latest`, `Describe this image`); provider-safe error mapping.
+  - **Frontend UX to port:** reuse hidden file inputs for `Take Photo` (`capture="environment"`) and `Upload Photo`; in main chat composer, only show compact camera/upload quick-actions while message input is focused (two 60px buttons stacked above-left of mic) to preserve idle UI space.
 - [ ] Screenshot relay: periodic dev machine captures → Large 3 summarizes → phone
 - [ ] File browser: browse & preview project files from mobile
 

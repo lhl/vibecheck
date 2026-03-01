@@ -14,6 +14,7 @@ from vibecheck.auth import PSKAuthMiddleware, load_psk
 from vibecheck.routes.api import router as api_router
 from vibecheck.routes.push import router as push_router
 from vibecheck.routes.translate import router as translate_router
+from vibecheck.routes.vision import router as vision_router
 from vibecheck.routes.voice import router as voice_router
 from vibecheck.ws import bind_session_manager
 from vibecheck.ws import router as ws_router
@@ -63,6 +64,7 @@ def create_app() -> FastAPI:
     app.include_router(api_router)
     app.include_router(push_router)
     app.include_router(translate_router)
+    app.include_router(vision_router)
     app.include_router(voice_router)
     app.include_router(ws_router)
 

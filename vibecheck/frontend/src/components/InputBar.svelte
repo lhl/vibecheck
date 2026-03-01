@@ -12,15 +12,23 @@
   export let talkerState = 'idle'
   export let onTalkerToggle = null
 
+  const VISION_ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+  const VISION_MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
   export let value = ''
   let isSubmitting = false
   let errorMessage = ''
   let textareaEl = null
   let recording = false
+  let textareaFocused = false
+  let visionBusy = false
+  let takePhotoInputEl = null
+  let uploadImageInputEl = null
 
   $: isConnected = connectionStatus === 'connected'
   $: isDisabled = !isConnected || !sessionId || isSubmitting
   $: placeholder = pendingInput ? 'Answer the question...' : 'Send a message...'
+  $: showVisionActions = textareaFocused && !talkerActive
 
   $: talkerLabel = (() => {
     switch (talkerState) {
@@ -123,6 +131,103 @@
     autoResize()
   }
 
+  function onTextareaFocus() {
+    textareaFocused = true
+  }
+
+  function onTextareaBlur() {
+    textareaFocused = false
+  }
+
+  function launchTakePhotoPicker() {
+    if (isDisabled || visionBusy || !showVisionActions) {
+      return
+    }
+    takePhotoInputEl?.click()
+  }
+
+  function launchUploadImagePicker() {
+    if (isDisabled || visionBusy || !showVisionActions) {
+      return
+    }
+    uploadImageInputEl?.click()
+  }
+
+  function validateImageFile(file) {
+    if (!VISION_ALLOWED_MIME_TYPES.has(file.type)) {
+      return 'Unsupported file type. Use JPEG, PNG, or WEBP.'
+    }
+    if (file.size > VISION_MAX_UPLOAD_BYTES) {
+      return 'Image exceeds 10MB limit.'
+    }
+    return ''
+  }
+
+  async function getVisionFailureDetail(response) {
+    try {
+      const payload = await response.json()
+      if (typeof payload?.detail === 'string' && payload.detail.trim()) {
+        return payload.detail.trim()
+      }
+    } catch {
+      // no-op
+    }
+    return `Vision request failed with status ${response.status}.`
+  }
+
+  async function handleVisionFileChange(event) {
+    const input = event.currentTarget
+    const file = input?.files?.[0] ?? null
+    if (input) {
+      input.value = ''
+    }
+    if (!file) {
+      return
+    }
+
+    const validationError = validateImageFile(file)
+    if (validationError) {
+      errorMessage = validationError
+      return
+    }
+
+    visionBusy = true
+    errorMessage = ''
+
+    try {
+      const formData = new FormData()
+      formData.append('image', file)
+
+      const response = await fetch('/api/vision', {
+        method: 'POST',
+        headers: {
+          ...(psk ? { 'X-PSK': psk } : {}),
+        },
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error(await getVisionFailureDetail(response))
+      }
+
+      const payload = await response.json()
+      const text = typeof payload?.text === 'string' ? payload.text.trim() : ''
+      if (!text) {
+        throw new Error('Vision response did not include description text.')
+      }
+
+      const contextLine = `Image context: ${text}`
+      const base = value.trim()
+      value = base ? `${base}\n${contextLine}` : contextLine
+      await tick()
+      autoResize()
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'Vision request failed'
+    } finally {
+      visionBusy = false
+    }
+  }
+
   function handleTalkerToggle() {
     if (typeof onTalkerToggle === 'function') {
       onTalkerToggle()
@@ -157,15 +262,64 @@
   </div>
 {:else}
   <div class="input-bar" class:recording>
-    <MicButton
-      {psk}
-      language={voiceLanguage}
-      disabled={isDisabled}
-      talkerActive={false}
-      onTranscribed={handleTranscribed}
-      onRecordingChange={handleRecordingChange}
-      onTalkerToggle={handleTalkerToggle}
-    />
+    <div class="left-stack">
+      {#if showVisionActions}
+        <div class="vision-actions">
+          <button
+            type="button"
+            class="vision-button"
+            aria-label="Take photo"
+            disabled={isDisabled || visionBusy}
+            on:pointerdown|preventDefault
+            on:click={launchTakePhotoPicker}
+          >
+            Cam
+          </button>
+          <button
+            type="button"
+            class="vision-button"
+            aria-label="Upload image"
+            disabled={isDisabled || visionBusy}
+            on:pointerdown|preventDefault
+            on:click={launchUploadImagePicker}
+          >
+            Img
+          </button>
+        </div>
+      {/if}
+
+      <input
+        class="hidden-file-input"
+        bind:this={takePhotoInputEl}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        data-testid="take-photo-input"
+        aria-hidden="true"
+        tabindex="-1"
+        on:change={handleVisionFileChange}
+      />
+      <input
+        class="hidden-file-input"
+        bind:this={uploadImageInputEl}
+        type="file"
+        accept="image/*"
+        data-testid="upload-image-input"
+        aria-hidden="true"
+        tabindex="-1"
+        on:change={handleVisionFileChange}
+      />
+
+      <MicButton
+        {psk}
+        language={voiceLanguage}
+        disabled={isDisabled}
+        talkerActive={false}
+        onTranscribed={handleTranscribed}
+        onRecordingChange={handleRecordingChange}
+        onTalkerToggle={handleTalkerToggle}
+      />
+    </div>
     <textarea
       rows="1"
       aria-label="Message input"
@@ -175,6 +329,8 @@
       disabled={isDisabled}
       on:keydown={onKeyDown}
       on:input={onInput}
+      on:focus={onTextareaFocus}
+      on:blur={onTextareaBlur}
     ></textarea>
     <button type="button" on:click={submit} disabled={isDisabled}>Send</button>
   </div>
@@ -189,6 +345,18 @@
     grid-template-columns: auto 1fr auto;
     gap: 0.35rem;
     align-items: start;
+  }
+
+  .left-stack {
+    display: grid;
+    gap: 0.35rem;
+    align-content: start;
+  }
+
+  .vision-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 60px);
+    gap: 0.35rem;
   }
 
   textarea {
@@ -230,6 +398,16 @@
 
   button:disabled {
     opacity: 0.6;
+  }
+
+  .vision-button {
+    border: 1px solid var(--secondary-border);
+    background: var(--secondary-bg);
+    color: var(--secondary-fg);
+  }
+
+  .hidden-file-input {
+    display: none;
   }
 
   .error {

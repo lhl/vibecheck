@@ -132,6 +132,38 @@
   - `cd vibecheck/frontend && npm test -- src/App.test.js src/components/ChatMessage.test.js` -> pass.
   - `cd vibecheck/frontend && npm run build` -> pass.
 
+### L8 vision port: prototype review + end-to-end integration
+
+- Reviewed `frontend-prototype` vision implementation before coding:
+  - backend contract: `POST /api/vision` multipart `image`, MIME allowlist (`image/jpeg|image/png|image/webp`), default size limit `10MB`, fixed prompt/model (`Describe this image`, `mistral-large-latest`), provider-safe error mapping,
+  - frontend behavior: hidden camera/gallery file inputs, selection validation, multipart upload to `/api/vision`.
+- Updated planning docs first to lock implementation scope:
+  - `docs/PLAN.md`: added explicit backend contract and compact composer UX notes for camera/gallery integration.
+  - `docs/IMPLEMENTATION.md`: added vision proxy test expectations, `test_vision.py` in test layout, and L8 port shape/verification notes.
+- Backend implementation:
+  - Added `vibecheck/routes/vision.py` with:
+    - `POST /api/vision` endpoint,
+    - upload validation + size guard (`VISION_MAX_UPLOAD_BYTES`),
+    - Mistral chat-completions call shaping (image data URI + fixed text prompt),
+    - upstream error mapping via `UpstreamVisionError`.
+  - Registered vision router in `vibecheck/app.py`.
+  - Added backend tests in `vibecheck/tests/test_vision.py` (success, missing image, unsupported MIME before API key check, upstream mapping, missing key).
+- Frontend implementation:
+  - Extended `vibecheck/frontend/src/components/InputBar.svelte`:
+    - added hidden camera/upload file inputs,
+    - added two compact `60px` quick-action buttons (`Cam`, `Img`) shown only while message textarea is focused,
+    - positioned actions above-left of the mic stack to preserve idle UI space,
+    - added `/api/vision` multipart upload flow and inserts returned text as `Image context: ...` into composer.
+  - Added tests in `vibecheck/frontend/src/components/InputBar.test.js` for:
+    - focus-only visibility of camera/upload buttons,
+    - upload-button wiring to hidden input,
+    - multipart submit to `/api/vision` and draft insertion behavior.
+- Verification:
+  - `uv run pytest vibecheck/tests/test_vision.py -v` -> pass.
+  - `cd vibecheck/frontend && npm test -- src/components/InputBar.test.js` -> pass.
+  - `uv run pytest vibecheck/tests/ -v` -> pass (`157` tests).
+  - `cd vibecheck/frontend && npm run build` -> pass.
+
 ## 2026-02-28
 
 ### Phase 7 planning + UI design spec
