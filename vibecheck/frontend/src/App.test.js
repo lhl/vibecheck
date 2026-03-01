@@ -257,7 +257,13 @@ describe('App phase 4 shell', () => {
 
       serviceWorker.dispatchEvent(
         new window.MessageEvent('message', {
-          data: { type: 'notification_action', action: 'approve', url: '/?sid=s-1', call_id: 'tc-1' },
+          data: {
+            type: 'notification_action',
+            action: 'approve',
+            url: '/?sid=s-1',
+            call_id: 'tc-1',
+            source: 'sw_notificationclick',
+          },
         }),
       )
 
@@ -272,7 +278,175 @@ describe('App phase 4 shell', () => {
       expect(approveCall).toBeTruthy()
       const body = approveCall[1]?.body ? JSON.parse(approveCall[1].body) : null
       expect(body).toMatchObject({ call_id: 'tc-1', approved: true })
+      expect(approveCall?.[1]?.headers).toMatchObject({
+        'Content-Type': 'application/json',
+        'X-Vibecheck-Notification-Action': 'approve',
+        'X-Vibecheck-Notification-Source': 'sw_notificationclick',
+      })
       expect(fetchSpy).not.toHaveBeenCalledWith('/api/sessions/s-1/state', expect.anything())
+
+      const traceRaw = localStorage.getItem('vibecheck_notification_trace')
+      expect(traceRaw).toBeTruthy()
+      const trace = JSON.parse(traceRaw)
+      expect(
+        trace.some(
+          (entry) =>
+            entry.step === 'approve_request' &&
+            entry.approved === true &&
+            entry.action === 'approve' &&
+            entry.source === 'sw_notificationclick',
+        ),
+      ).toBe(true)
+    } finally {
+      if (originalServiceWorker) {
+        Object.defineProperty(navigator, 'serviceWorker', originalServiceWorker)
+      } else {
+        delete navigator.serviceWorker
+      }
+    }
+  })
+
+  it('handles push deny action sent via service worker message', async () => {
+    localStorage.setItem('vibecheck_psk', 'dev-psk')
+    window.history.pushState({}, '', '/?sid=s-1')
+
+    const serviceWorker = new EventTarget()
+    const originalServiceWorker = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker')
+    Object.defineProperty(navigator, 'serviceWorker', { value: serviceWorker, configurable: true })
+
+    try {
+      const fetchSpy = vi.fn((resource, options = {}) => {
+        if (resource === '/api/sessions') {
+          return Promise.resolve(
+            new Response(JSON.stringify([{ id: 's-1', status: 'running' }]), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }),
+          )
+        }
+
+        if (resource === '/api/sessions/s-1/approve' && options.method === 'POST') {
+          return Promise.resolve(
+            new Response(JSON.stringify({ status: 'ok' }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }),
+          )
+        }
+
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))
+      })
+
+      vi.stubGlobal('fetch', fetchSpy)
+
+      render(App)
+
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      serviceWorker.dispatchEvent(
+        new window.MessageEvent('message', {
+          data: {
+            type: 'notification_action',
+            action: 'deny',
+            url: '/?sid=s-1',
+            call_id: 'tc-1',
+            source: 'sw_notificationclick',
+          },
+        }),
+      )
+
+      await waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalledWith(
+          '/api/sessions/s-1/approve',
+          expect.objectContaining({ method: 'POST' }),
+        )
+      })
+
+      const approveCall = fetchSpy.mock.calls.find((call) => call[0] === '/api/sessions/s-1/approve')
+      expect(approveCall).toBeTruthy()
+      const body = approveCall[1]?.body ? JSON.parse(approveCall[1].body) : null
+      expect(body).toMatchObject({ call_id: 'tc-1', approved: false })
+      expect(approveCall?.[1]?.headers).toMatchObject({
+        'Content-Type': 'application/json',
+        'X-Vibecheck-Notification-Action': 'deny',
+        'X-Vibecheck-Notification-Source': 'sw_notificationclick',
+      })
+      expect(fetchSpy).not.toHaveBeenCalledWith('/api/sessions/s-1/state', expect.anything())
+
+      const traceRaw = localStorage.getItem('vibecheck_notification_trace')
+      expect(traceRaw).toBeTruthy()
+      const trace = JSON.parse(traceRaw)
+      expect(
+        trace.some(
+          (entry) =>
+            entry.step === 'approve_request' &&
+            entry.approved === false &&
+            entry.action === 'deny' &&
+            entry.source === 'sw_notificationclick',
+        ),
+      ).toBe(true)
+    } finally {
+      if (originalServiceWorker) {
+        Object.defineProperty(navigator, 'serviceWorker', originalServiceWorker)
+      } else {
+        delete navigator.serviceWorker
+      }
+    }
+  })
+
+  it('does not resolve approval when service worker action is empty', async () => {
+    localStorage.setItem('vibecheck_psk', 'dev-psk')
+    window.history.pushState({}, '', '/?sid=s-1')
+
+    const serviceWorker = new EventTarget()
+    const originalServiceWorker = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker')
+    Object.defineProperty(navigator, 'serviceWorker', { value: serviceWorker, configurable: true })
+
+    try {
+      const fetchSpy = vi.fn((resource) => {
+        if (resource === '/api/sessions') {
+          return Promise.resolve(
+            new Response(JSON.stringify([{ id: 's-1', status: 'running' }]), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }),
+          )
+        }
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))
+      })
+
+      vi.stubGlobal('fetch', fetchSpy)
+
+      render(App)
+
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      serviceWorker.dispatchEvent(
+        new window.MessageEvent('message', {
+          data: {
+            type: 'notification_action',
+            action: '',
+            url: '/?sid=s-1',
+            call_id: 'tc-1',
+            source: 'sw_notificationclick_empty_action',
+          },
+        }),
+      )
+
+      await waitFor(() => {
+        const traceRaw = localStorage.getItem('vibecheck_notification_trace')
+        const trace = traceRaw ? JSON.parse(traceRaw) : []
+        expect(
+          trace.some(
+            (entry) =>
+              entry.step === 'skip_invalid_action' &&
+              entry.action === '(empty)' &&
+              entry.source === 'sw_notificationclick_empty_action',
+          ),
+        ).toBe(true)
+      })
+
+      expect(fetchSpy.mock.calls.some((call) => call[0] === '/api/sessions/s-1/approve')).toBe(false)
     } finally {
       if (originalServiceWorker) {
         Object.defineProperty(navigator, 'serviceWorker', originalServiceWorker)

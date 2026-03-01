@@ -181,19 +181,23 @@
   })
 </script>
 
-<article data-testid="chat-message" class="chat-message {roleClass}">
+<!-- svelte-ignore a11y-no-noninteractive-tabindex -->
+<article
+  data-testid="chat-message"
+  class="chat-message {roleClass}"
+  class:translatable={canTranslate}
+  role={canTranslate ? 'button' : undefined}
+  tabindex={canTranslate ? 0 : undefined}
+  aria-label={canTranslate ? (showTranslated ? 'Show original' : 'Translate') : undefined}
+  on:click={canTranslate ? toggleTranslate : undefined}
+  on:keydown={canTranslate ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleTranslate(); } } : undefined}
+>
   <p class="message-body">{@html body}</p>
   <div class="meta">
-    {#if canTranslate}
-      <button
-        type="button"
-        class="translate"
-        aria-label={showTranslated ? 'Show original' : 'Translate'}
-        disabled={isTranslating}
-        on:click={toggleTranslate}
-      >
-        🌐
-      </button>
+    {#if isTranslating}
+      <span class="translating-indicator">translating…</span>
+    {:else if showTranslated}
+      <span class="translated-badge">🌐</span>
     {/if}
     {#if timestamp}
       <p class="timestamp">{timestamp}</p>
@@ -267,20 +271,24 @@
     gap: 0.4rem;
   }
 
-  .translate {
-    border: 1px solid var(--card-border);
-    background: transparent;
-    color: inherit;
-    border-radius: 2px;
-    width: 34px;
-    height: 28px;
-    display: grid;
-    place-items: center;
-    font-size: 0.95rem;
+  .chat-message.translatable {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
   }
 
-  .translate:disabled {
-    opacity: 0.55;
+  .chat-message.translatable:active {
+    opacity: 0.75;
+  }
+
+  .translating-indicator {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .translated-badge {
+    font-size: 0.7rem;
+    opacity: 0.6;
   }
 
   .translate-error {
