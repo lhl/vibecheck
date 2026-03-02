@@ -81,24 +81,24 @@ vibecheck hooks directly into Vibe's Python event system — no terminal scrapin
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  EC2 Instance                                                 │
-│                                                               │
+│  EC2 Instance                                                │
+│                                                              │
 │  ┌──────────────────┐     ┌────────────────────────────────┐ │
-│  │  Vibe AgentLoop   │────→│  vibecheck Bridge (FastAPI)    │ │
-│  │  Events +         │←────│  WebSocket + REST on :7870     │ │
-│  │  Callbacks        │     │                                │ │
+│  │  Vibe AgentLoop  │────→│  vibecheck Bridge (FastAPI)    │ │
+│  │  Events +        │←────│  WebSocket + REST on :7870     │ │
+│  │  Callbacks       │     │                                │ │
 │  └──────────────────┘     │  SessionManager                │ │
-│                            │  Event broadcasting            │ │
-│                            │  Voice / Translation / Push    │ │
-│                            └──────────┬─────────────────────┘ │
-│                            ┌──────────┴──────────┐            │
-│                            │  Caddy (HTTPS/WSS)  │            │
-│                            └──────────┬──────────┘            │
-└───────────────────────────────────────┼───────────────────────┘
-                                        │
-                                ┌───────┴───────┐
-                                │  Phone (PWA)  │
-                                └───────────────┘
+│                           │  Event broadcasting            │ │
+│                           │  Voice / Translation / Push    │ │
+│                           └──────────┬─────────────────────┘ │
+│                           ┌──────────┴──────────┐            │
+│                           │  Caddy (HTTPS/WSS)  │            │
+│                           └──────────┬──────────┘            │
+└──────────────────────────────────────┼───────────────────────┘
+                                       │
+                               ┌───────┴───────┐
+                               │  Phone (PWA)  │
+                               └───────────────┘
 ```
 
 ### Why Not Terminal Scraping?
