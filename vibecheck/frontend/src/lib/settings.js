@@ -22,7 +22,7 @@ function safeLocalStorageSet(key, value) {
 
 export function loadVoiceLanguage() {
   const stored = safeLocalStorageGet(VOICE_LANGUAGE_KEY)
-  if (stored === 'en' || stored === 'ja') {
+  if (stored === 'en' || stored === 'ja' || stored === 'fr') {
     return stored
   }
   return 'ja'
@@ -30,7 +30,7 @@ export function loadVoiceLanguage() {
 
 export function storeVoiceLanguage(value) {
   const trimmed = typeof value === 'string' ? value.trim().toLowerCase() : ''
-  if (trimmed !== 'en' && trimmed !== 'ja') {
+  if (trimmed !== 'en' && trimmed !== 'ja' && trimmed !== 'fr') {
     return
   }
   safeLocalStorageSet(VOICE_LANGUAGE_KEY, trimmed)

@@ -10,7 +10,7 @@
 
   $: roleClass = event?.type === 'user_message' ? 'user' : 'assistant'
   $: originalText = event?.content || ''
-  $: targetLanguageCode = targetLanguage === 'en' ? 'en' : 'ja'
+  $: targetLanguageCode = targetLanguage || 'ja'
   $: translationCacheKey = event?.id ? `${event.id}:${targetLanguageCode}` : ''
   $: canTranslate = Boolean(
     event?.id &&

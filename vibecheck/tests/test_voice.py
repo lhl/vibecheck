@@ -110,7 +110,7 @@ async def test_voice_transcribe_rejects_unsupported_language(
     monkeypatch.setattr(voice_module, "get_mistral_client", _should_not_call)
 
     response = await client.post(
-        "/api/voice/transcribe?language=fr",
+        "/api/voice/transcribe?language=xx",
         headers={"X-PSK": psk, "Content-Type": "audio/webm"},
         content=b"fake-audio",
     )
