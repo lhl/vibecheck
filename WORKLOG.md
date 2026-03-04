@@ -1,5 +1,19 @@
 # vibecheck — Worklog
 
+## 2026-03-04
+
+### Review follow-up: French language option test fixes
+
+- Frontend tests:
+  - Updated language settings coverage to treat `fr` as supported and moved unsupported-case assertion to `xx` (`vibecheck/frontend/src/lib/settings.test.js`).
+- Backend tests:
+  - Added explicit `fr` coverage for STT language forwarding by parameterizing the raw-audio transcribe test over `en` and `fr` (`vibecheck/tests/test_voice.py`).
+- Verification:
+  - `cd vibecheck/frontend && npm test -- src/lib/settings.test.js` -> pass.
+  - `uv run pytest vibecheck/tests/test_voice.py -q` -> pass (`23 passed`).
+  - `cd vibecheck/frontend && npm test` -> pass (`22 files, 98 tests`).
+  - `cd vibecheck/frontend && npm run build` -> pass.
+
 ## 2026-03-01
 
 ### YOLO mode (L9): auto-approve toggle + high-visibility UI
