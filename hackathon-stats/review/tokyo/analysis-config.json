@@ -1,0 +1,11 @@
+{
+  "title": "Mistral Hackathon 2026 - Project Summary",
+  "projects_dir": "/home/lhl/github/mistral-hackathon/tokyo",
+  "hack_window": {
+    "start": "2026-02-28T09:00:00+09:00",
+    "end": "2026-03-01T16:00:00+09:00",
+    "start_label": "Sat Feb 28 09:00 JST",
+    "end_label": "Sun Mar 1 16:00 JST",
+    "label": "Sat Feb 28 09:00 JST to Sun Mar 1 16:00 JST"
+  }
+}
