@@ -28,6 +28,24 @@ In other words: most projects may well have used AI, but most do **not** look li
 
 Tokyo also shows a stronger visible agent-tool signal than the selected global set.
 
+## Code Volume Signal
+
+Another strong signal is plain code volume.
+
+- **12 / 46** Tokyo projects have at least **10k** non-lib code lines
+- **8 / 26** Global projects have at least **10k** non-lib code lines
+- **20 / 72** projects overall have at least **10k** non-lib code lines
+
+That matters because, for a short hackathon, producing a genuinely new five-figure codebase by hand is uncommon. Substantial non-lib LoC makes it more likely that at least one of the following is true:
+
+- the team used AI-assisted coding heavily
+- the team started from a meaningful pre-existing codebase
+- the project includes a large scaffold, generated code, or imported app skeleton committed as first-party code
+
+So large codebases should not be read as proof of AI usage by themselves, but they are strong evidence against a simplistic reading of "no `AGENTS.md` / `CLAUDE.md`, therefore no AI".
+
+The commit-pattern analysis also shows several projects with very large initial or mid-project commits, which is a reminder that some of this volume likely comes from existing codebases or large code drops rather than incremental hackathon-only authoring.
+
 ## Analysis Tool Usage
 
 Counts below are based on explicit evidence in the repo contents or git metadata. A single project can appear under multiple tools.
