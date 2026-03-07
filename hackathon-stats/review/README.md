@@ -46,6 +46,27 @@ So large codebases should not be read as proof of AI usage by themselves, but th
 
 The commit-pattern analysis also shows several projects with very large initial or mid-project commits, which is a reminder that some of this volume likely comes from existing codebases or large code drops rather than incremental hackathon-only authoring.
 
+## Documentation Signal
+
+Markdown volume is another useful workflow signal.
+
+- **23 / 46** Tokyo projects have at least **5** Markdown files
+- **10 / 26** Global projects have at least **5** Markdown files
+- **33 / 72** projects overall have at least **5** Markdown files
+- **15 / 46** Tokyo projects have at least **10** Markdown files
+- **4 / 26** Global projects have at least **10** Markdown files
+- **19 / 72** projects overall have at least **10** Markdown files
+
+This is not as strong a signal as code volume, but it still matters. In practice, dense project-local documentation usually correlates with one of these:
+
+- an agentic workflow that benefits from explicit plans, task lists, handoff notes, and operating instructions
+- a team with unusually disciplined engineering habits for a short hackathon
+- both
+
+Put differently, normal hackathon teams do not usually produce deep Markdown structure unless they are either highly process-oriented or leaning on tools that reward explicit written context. That makes lots of Markdown files another reason not to assume "no visible agent files" means "no AI-assisted workflow".
+
+It is still not definitive proof of AI usage. Some teams document heavily without agents, and some teams use AI heavily with almost no checked-in docs. But documentation density is a useful maturity signal, and weak documentation often lines up with weaker code quality and weaker agent performance.
+
 ## Analysis Tool Usage
 
 Counts below are based on explicit evidence in the repo contents or git metadata. A single project can appear under multiple tools.
