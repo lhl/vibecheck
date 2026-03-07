@@ -13,6 +13,7 @@ Phone (PWA) ─────────────┘
 ```
 
 > vibecheck was originally created for the [Mistral Worldwide Hackathon (Tokyo), February 28 to March 1, 2026](https://hackiterate.com/mistral-worldwide-hackathons). The project as originally submitted and presented during the hackathon is preserved for posterity with a [`mistral-hackathon`](https://github.com/lhl/vibecheck/tree/mistral-hackathon) tag. We've also published some extra fun [hackathon analysis and stats](https://github.com/lhl/vibecheck/tree/main/hackathon-stats).
+>
 > With the hackathon over, we've merged the stats and [`post-hackathon`](https://github.com/lhl/vibecheck/tree/post-hackathon) cleanup into [`main`](https://github.com/lhl/vibecheck/tree/main) ([PR #3](https://github.com/lhl/vibecheck/pull/3)), and we will continue updating this project as time allows (since this is an app that really *should* exist!).
 
 ---
