@@ -1,5 +1,12 @@
 # vibecheck — Worklog
 
+## 2026-03-07
+
+### README post-hackathon copy polish
+
+- Updated `README.md` to normalize the project name styling to `vibecheck` in the new hackathon note.
+- Tightened the new post-hackathon sentence so the merge-back wording reads more naturally.
+
 ## 2026-03-04
 
 ### Review follow-up: French language option test fixes
