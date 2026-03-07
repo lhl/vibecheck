@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2520" height="520" viewBox="0 0 2520 520">
+  <style>
+    text {
+      font-family: "DejaVu Sans Mono", "Liberation Mono", monospace;
+      font-size: 88px;
+      font-weight: 700;
+      white-space: pre;
+    }
+  </style>
+  <text x="32" y="92" fill="#ffd700" xml:space="preserve">        _ __              __              __  </text>
+  <text x="32" y="188" fill="#ffaf00" xml:space="preserve"> _   __(_) /_  ___  _____/ /_  ___  _____/ /__</text>
+  <text x="32" y="284" fill="#ff8700" xml:space="preserve">| | / / / __ \/ _ \/ ___/ __ \/ _ \/ ___/ //_/
+</text>
+  <text x="32" y="380" fill="#ff5f00" xml:space="preserve">| |/ / / /_/ /  __/ /__/ / / /  __/ /__/ ,&lt;   </text>
+  <text x="32" y="476" fill="#ff0000" xml:space="preserve">|___/_/_.___/\___/\___/_/ /_/\___/\___/_/|_|  </text>
+</svg>

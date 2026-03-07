@@ -2,7 +2,9 @@
 
 **Check your vibes from anywhere.**
 
-vibecheck is a mobile PWA that lets you monitor and control [Mistral Vibe](https://github.com/mistralai/mistral-vibe) coding agents from your phone. Approve tool calls from your pocket, talk to your agent in Japanese, get push notifications when it needs you, and manage multiple sessions at once. Built for the Mistral Hackathon Tokyo.
+vibecheck is a mobile PWA that lets you monitor and control [Mistral Vibe](https://github.com/mistralai/mistral-vibe) coding agents from your phone. Approve tool calls from your pocket, talk to your agent in Japanese, get push notifications when it needs you, and manage multiple sessions at once.
+
+![vibecheck — terminal + phone](docs/vibecheck-screenshot-logo.png)
 
 ```
 Terminal (Textual TUI) ──┐
