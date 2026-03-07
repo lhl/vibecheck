@@ -1,5 +1,19 @@
 # vibecheck — Worklog
 
+## 2026-03-04
+
+### Review follow-up: French language option test fixes
+
+- Frontend tests:
+  - Updated language settings coverage to treat `fr` as supported and moved unsupported-case assertion to `xx` (`vibecheck/frontend/src/lib/settings.test.js`).
+- Backend tests:
+  - Added explicit `fr` coverage for STT language forwarding by parameterizing the raw-audio transcribe test over `en` and `fr` (`vibecheck/tests/test_voice.py`).
+- Verification:
+  - `cd vibecheck/frontend && npm test -- src/lib/settings.test.js` -> pass.
+  - `uv run pytest vibecheck/tests/test_voice.py -q` -> pass (`23 passed`).
+  - `cd vibecheck/frontend && npm test` -> pass (`22 files, 98 tests`).
+  - `cd vibecheck/frontend && npm run build` -> pass.
+
 ## 2026-03-01
 
 ### YOLO mode (L9): auto-approve toggle + high-visibility UI
@@ -988,3 +1002,22 @@
 - Verification:
   - `cd vibecheck/frontend && npm test -- --run src/App.test.js src/components/ChatMessage.test.js` -> pass.
   - `cd vibecheck/frontend && npm run build` -> pass.
+
+### Multi-session architecture planning (single URL + session orchestration)
+- Added `docs/PLAN-multisession.md` to capture a dedicated plan for serving all sessions from `https://vibecheck.shisa.ai`.
+- Documented current constraints (one live in-process session per `vibecheck-vibe` process) and target requirements (global session list, routed WS/events/actions, worker health, private internal networking).
+- Wrote an open alternatives set:
+  - Option A: Hub + worker mesh (recommended target),
+  - Option B: Caddy fan-out to independent servers (fastest short-term),
+  - Option C: broker-backed hub/worker,
+  - Option D: single supervisor process,
+  - Option E: tmux/PTY fallback.
+- Added a phased rollout (M0–M4), including future `POST /api/sessions` and `DELETE /api/sessions/{id}` for spawn/teardown while preserving operator TUI access (SSH/tmux path) plus PWA control.
+
+### Multi-model recommendation capture (GPT-5.3-Codex xhigh)
+- Added a dedicated `## Recommendation: GPT-5.3-Codex (xhigh)` section to `docs/PLAN-multisession.md`.
+- Recommendation emphasizes an explicit staged policy:
+  - ship Option 1 now for fastest single-origin multi-session value,
+  - add migration seams immediately (`session_origin`, `worker_id`-ready metadata),
+  - promote to Option 5B by concrete trigger gates (isolation, TUI-per-spawned-session, scale, multi-host).
+- Included reasoning on why to defer full worker protocol complexity until observed demand while preserving a stable public PWA API contract.

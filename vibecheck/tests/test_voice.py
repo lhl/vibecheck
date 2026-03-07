@@ -39,10 +39,12 @@ class _DummyMistralClient:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("language", ["en", "fr"])
 async def test_voice_transcribe_accepts_raw_audio_and_forwards_language(
     client,
     psk: str,
     monkeypatch: pytest.MonkeyPatch,
+    language: str,
 ) -> None:
     import vibecheck.routes.voice as voice_module
 
@@ -50,19 +52,19 @@ async def test_voice_transcribe_accepts_raw_audio_and_forwards_language(
     monkeypatch.setattr(voice_module, "get_mistral_client", lambda: dummy)
 
     response = await client.post(
-        "/api/voice/transcribe?language=en",
+        f"/api/voice/transcribe?language={language}",
         headers={"X-PSK": psk, "Content-Type": "audio/webm;codecs=opus"},
         content=b"fake-audio",
     )
     assert response.status_code == 200
     payload = response.json()
     assert payload["text"] == "konnichiwa"
-    assert payload["language"] == "en"
+    assert payload["language"] == language
     assert payload["duration_ms"] == 1230
 
     assert dummy.audio.transcriptions.calls
     assert dummy.audio.transcriptions.calls[-1]["model"] == "voxtral-mini-latest"
-    assert dummy.audio.transcriptions.calls[-1]["language"] == "en"
+    assert dummy.audio.transcriptions.calls[-1]["language"] == language
 
 
 @pytest.mark.asyncio
@@ -110,7 +112,7 @@ async def test_voice_transcribe_rejects_unsupported_language(
     monkeypatch.setattr(voice_module, "get_mistral_client", _should_not_call)
 
     response = await client.post(
-        "/api/voice/transcribe?language=fr",
+        "/api/voice/transcribe?language=xx",
         headers={"X-PSK": psk, "Content-Type": "audio/webm"},
         content=b"fake-audio",
     )

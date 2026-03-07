@@ -1205,3 +1205,78 @@ async def test_broadcast_stats_sends_event() -> None:
     assert len(stats_events) == 1
     assert stats_events[0]["total_tokens"] == 150
     assert stats_events[0]["is_local"] is True
+
+
+@pytest.mark.asyncio
+async def test_set_auto_approve_drains_single_pending_approval() -> None:
+    manager = RecordingConnectionManager()
+    bridge = SessionBridge("drain-single", connection_manager=manager)
+
+    future: asyncio.Future = asyncio.get_running_loop().create_future()
+    bridge.pending_approval["tc-drain"] = future
+    bridge.pending_approval_context["tc-drain"] = {"tool_name": "bash", "args": {"command": "ls"}}
+    bridge.state = "waiting_approval"
+
+    bridge.set_auto_approve(True)
+    await asyncio.sleep(0)  # let background broadcast tasks run
+
+    assert future.done()
+    assert await future == {"approved": True, "edited_args": None}
+    assert bridge.auto_approve is True
+    assert bridge.state == "running"
+    assert bridge.pending_approval == {}
+
+    resolution_events = [e for _, e in manager.events if e.get("type") == "approval_resolution"]
+    assert len(resolution_events) == 1
+    assert resolution_events[0]["call_id"] == "tc-drain"
+    assert resolution_events[0]["approved"] is True
+    assert resolution_events[0]["source"] == "auto_approve_drain"
+
+
+@pytest.mark.asyncio
+async def test_set_auto_approve_drains_multiple_pending_approvals() -> None:
+    manager = RecordingConnectionManager()
+    bridge = SessionBridge("drain-multi", connection_manager=manager)
+
+    loop = asyncio.get_running_loop()
+    future_a: asyncio.Future = loop.create_future()
+    future_b: asyncio.Future = loop.create_future()
+    bridge.pending_approval["tc-a"] = future_a
+    bridge.pending_approval["tc-b"] = future_b
+    bridge.pending_approval_context["tc-a"] = {"tool_name": "bash", "args": {"command": "ls"}}
+    bridge.pending_approval_context["tc-b"] = {"tool_name": "bash", "args": {"command": "pwd"}}
+    bridge.state = "waiting_approval"
+
+    bridge.set_auto_approve(True)
+    await asyncio.sleep(0)
+
+    assert future_a.done() and future_b.done()
+    assert await future_a == {"approved": True, "edited_args": None}
+    assert await future_b == {"approved": True, "edited_args": None}
+    assert bridge.pending_approval == {}
+    assert bridge.state == "running"
+
+    resolution_events = [e for _, e in manager.events if e.get("type") == "approval_resolution"]
+    assert len(resolution_events) == 2
+    drained_ids = {e["call_id"] for e in resolution_events}
+    assert drained_ids == {"tc-a", "tc-b"}
+    assert all(e["source"] == "auto_approve_drain" for e in resolution_events)
+
+
+@pytest.mark.asyncio
+async def test_set_auto_approve_false_does_not_drain() -> None:
+    manager = RecordingConnectionManager()
+    bridge = SessionBridge("no-drain", connection_manager=manager)
+    bridge.auto_approve = True  # start enabled
+
+    future: asyncio.Future = asyncio.get_running_loop().create_future()
+    bridge.pending_approval["tc-stay"] = future
+    bridge.pending_approval_context["tc-stay"] = {"tool_name": "bash", "args": {"command": "ls"}}
+    bridge.state = "waiting_approval"
+
+    bridge.set_auto_approve(False)
+    await asyncio.sleep(0)
+
+    assert not future.done()
+    assert bridge.auto_approve is False
+    assert "tc-stay" in bridge.pending_approval

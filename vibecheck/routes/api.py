@@ -74,6 +74,11 @@ def _session_or_404(session_id: str) -> SessionBridge:
     raise HTTPException(status_code=404, detail=f"Unknown session: {session_id}")
 
 
+def _require_controllable(bridge: SessionBridge) -> None:
+    if not bridge.controllable:
+        raise HTTPException(status_code=403, detail="Session is not controllable")
+
+
 @router.get("/api/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -184,6 +189,7 @@ async def message(session_id: str, body: MessageRequest) -> dict[str, str]:
 @router.post("/api/sessions/{session_id}/auto-approve")
 async def auto_approve(session_id: str, body: AutoApproveRequest) -> dict[str, object]:
     bridge = _session_or_404(session_id)
+    _require_controllable(bridge)
     bridge.set_auto_approve(body.enabled)
     return {"status": "ok", "auto_approve": bridge.auto_approve}
 

@@ -43,6 +43,7 @@
   <select id="voice-lang" value={voiceLanguage} on:change={handleVoiceChange}>
     <option value="ja">JA / Japanese</option>
     <option value="en">EN / English</option>
+    <option value="fr">FR / French</option>
   </select>
 
   <label for="notify-toggle">Notifications</label>

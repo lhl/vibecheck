@@ -151,7 +151,7 @@ def _map_mistral_error(error: SDKError) -> HTTPException:
 @router.post("/api/voice/transcribe")
 async def transcribe(
     request: Request,
-    language: Literal["ja", "en"] = Query("ja"),
+    language: Literal["ja", "en", "fr"] = Query("ja"),
 ) -> VoiceTranscriptionResponse:
     content_type = request.headers.get("content-type") or ""
     max_bytes = _max_audio_bytes()

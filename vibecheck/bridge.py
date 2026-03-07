@@ -542,6 +542,14 @@ class SessionBridge:
         if self.auto_approve == normalized:
             return
         self.auto_approve = normalized
+        if normalized and self.pending_approval:
+            for call_id in list(self.pending_approval.keys()):
+                self.resolve_approval(
+                    call_id=call_id,
+                    approved=True,
+                    edited_args=None,
+                    source="auto_approve_drain",
+                )
         self._broadcast_state_snapshot()
 
     async def request_approval(

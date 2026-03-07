@@ -25,10 +25,13 @@ describe('settings', () => {
 
     storeVoiceLanguage('ja')
     expect(loadVoiceLanguage()).toBe('ja')
+
+    storeVoiceLanguage('fr')
+    expect(loadVoiceLanguage()).toBe('fr')
   })
 
   it('ignores unsupported values', () => {
-    storeVoiceLanguage('fr')
+    storeVoiceLanguage('xx')
     expect(loadVoiceLanguage()).toBe('ja')
   })
 
