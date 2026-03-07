@@ -2,7 +2,9 @@
 
 This directory contains repo-level analysis for the Tokyo set in [tokyo/README.md](/home/lhl/github/lhl/vibecheck/hackathon-stats/review/tokyo/README.md) and the selected global set in [global/README.md](/home/lhl/github/lhl/vibecheck/hackathon-stats/review/global/README.md).
 
-## Summary
+I was curious to see what the AI Tool usage looks like on these projects. 
+
+## AI Tool Usage Summary
 
 Across the two datasets we analyzed **72 projects**:
 
@@ -157,7 +159,7 @@ The workflow used here was a lightweight hackathon adaptation of an established 
 
 #### Throughput
 
-The throughput number is the most concrete signal: **~23k code lines / ~3 people / ~31 hours ≈ 250 lines/person/hour sustained**. That is at the absolute ceiling of human capability for a peak sprint, and this was sustained across 31 hours including overnight work. For context, a productive human developer might sustain 100–200 lines/hour during focused coding; 250 lines/hour sustained over a full hackathon weekend — including architecture, debugging, testing, and documentation — is not plausible without heavy AI assistance.
+The throughput number is the most concrete signal: **~23k code lines / 2 people / ~31 hours ≈ 250 lines/person/hour sustained**. That is at the absolute ceiling of human capability for a peak sprint, and this was sustained across 31 hours including overnight work. For context, a productive human developer might sustain 100–200 lines/hour during focused coding; 250 lines/hour sustained over a full hackathon weekend — including architecture, debugging, testing, and documentation — is not plausible without heavy AI assistance.
 
 Combined with 727M tokens of documented AI usage across 69 sessions, there is no ambiguity here.
 
