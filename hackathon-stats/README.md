@@ -2,7 +2,7 @@
 
 Analysis of AI coding assistant session data from the vibecheck hackathon weekend (Feb 28 - Mar 1, 2026), using both Claude Code and OpenAI Codex CLI.
 
-Adapted from the [fsr4-rdna3-optimization session analysis methodology](../fsr4-rdna3-optimization/session-analysis/).
+Adapted from the [fsr4-rdna3-optimization session analysis methodology](https://github.com/lhl/fsr4-rdna3-optimization/tree/main/session-analysis).
 
 ## Weekend Summary
 
